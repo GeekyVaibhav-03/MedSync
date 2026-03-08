@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 150 20% 99%;
+    --foreground: 160 30% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 30% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 30% 8%;
+
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 152 60% 95%;
+    --secondary-foreground: 160 60% 25%;
+
+    --muted: 150 20% 96%;
+    --muted-foreground: 160 10% 45%;
+
+    --accent: 152 50% 92%;
+    --accent-foreground: 160 60% 20%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 15% 90%;
+    --input: 150 15% 90%;
+    --ring: 160 84% 39%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 160 30% 8%;
+    --sidebar-foreground: 150 20% 90%;
+    --sidebar-primary: 160 84% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 160 30% 14%;
+    --sidebar-accent-foreground: 150 20% 90%;
+    --sidebar-border: 160 20% 16%;
+    --sidebar-ring: 160 84% 45%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(160, 84%, 39%), hsl(152, 70%, 50%));
+    --gradient-hero: linear-gradient(135deg, hsl(150, 20%, 99%), hsl(152, 60%, 95%));
+    --shadow-card: 0 1px 3px 0 hsl(160 10% 50% / 0.06), 0 1px 2px -1px hsl(160 10% 50% / 0.06);
+    --shadow-card-hover: 0 10px 25px -5px hsl(160 10% 50% / 0.1), 0 8px 10px -6px hsl(160 10% 50% / 0.08);
+    --shadow-glow: 0 0 30px hsl(160 84% 39% / 0.15);
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 80% 55%;
+    --info-foreground: 0 0% 100%;
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 160 30% 5%;
+    --foreground: 150 20% 95%;
+    --card: 160 30% 8%;
+    --card-foreground: 150 20% 95%;
+    --popover: 160 30% 8%;
+    --popover-foreground: 150 20% 95%;
+    --primary: 160 84% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 160 30% 14%;
+    --secondary-foreground: 150 20% 90%;
+    --muted: 160 20% 12%;
+    --muted-foreground: 150 10% 55%;
+    --accent: 160 30% 14%;
+    --accent-foreground: 150 20% 90%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 160 20% 16%;
+    --input: 160 20% 16%;
+    --ring: 160 84% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer components {
+  .container-section {
+    @apply max-w-7xl mx-auto px-6 lg:px-12;
+  }
+  .section-padding {
+    @apply py-20 lg:py-24;
+  }
+  .healthcare-card {
+    @apply bg-card rounded-2xl p-8 transition-all duration-300;
+    box-shadow: var(--shadow-card);
+  }
+  .healthcare-card:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .glow-shadow {
+    box-shadow: var(--shadow-glow);
+  }
+}
