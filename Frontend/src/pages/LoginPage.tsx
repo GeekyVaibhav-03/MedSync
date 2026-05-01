@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { motion } from 'framer-motion';
+import axios from 'axios';
 import { Heart, Mail, Lock, ArrowRight, Shield, Stethoscope, FlaskConical, Pill, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { loginSuccess } from '@/store/slices/authSlice';
-import { authAPI } from '@/services/api';
+import { API_BASE_URL, authAPI } from '@/services/api';
 
 const roles = [
   { id: 'admin', label: 'Admin', icon: Shield, color: 'bg-primary/10 text-primary' },
@@ -66,8 +67,13 @@ const LoginPage = () => {
       }));
 
       navigate(getRoleRoute(user.role));
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const message = err.response?.data?.message;
+        setError(message || `Cannot reach backend at ${API_BASE_URL}. Please make sure the backend server is running.`);
+      } else {
+        setError('Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -150,7 +156,7 @@ const LoginPage = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@mediflow.com"
+                  placeholder="admin@medsync.com"
                   className="w-full rounded-xl border border-input bg-background pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring transition-all"
                   required
                 />

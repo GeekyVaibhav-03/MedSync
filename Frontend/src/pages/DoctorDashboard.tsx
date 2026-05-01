@@ -65,6 +65,102 @@ interface PatientHistory {
   currentLabReports?: PreviousLabReport[];
 }
 
+const LAB_TEST_CATEGORIES = [
+  {
+    label: 'BLOOD',
+    tests: [
+      'CBC',
+      'Hemoglobin',
+      'ESR',
+      'Blood Sugar Random',
+      'Fasting Blood Sugar',
+      'PPBS',
+      'HbA1c',
+      'Blood Urea',
+      'Blood Urea Nitrogen',
+      'Lipid Profile',
+      'Total Cholesterol',
+      'Triglycerides',
+      'HDL',
+      'LDL',
+      'Liver Function Test',
+      'Bilirubin Total',
+      'SGOT',
+      'SGPT',
+      'Alkaline Phosphatase',
+      'Thyroid Profile',
+      'T3',
+      'T4',
+      'TSH',
+    ],
+  },
+  {
+    label: 'Radiology',
+    tests: [
+      'X-Ray Chest',
+      'X-Ray Abdomen',
+      'X-Ray Spine',
+      'X-Ray Knee',
+      'X-Ray Shoulder',
+      'Mammography',
+      'DEXA Scan',
+    ],
+  },
+  {
+    label: 'Imaging',
+    tests: [
+      'Ultrasound Abdomen',
+      'Ultrasound Pelvis',
+      'CT Scan',
+      'CT Brain',
+      'CT Chest',
+      'MRI',
+      'MRI Brain',
+      'MRI Spine',
+      'Doppler Study',
+    ],
+  },
+  {
+    label: 'Heart',
+    tests: [
+      'ECG',
+      '2D Echo',
+      'TMT',
+      'Troponin I',
+      'CK-MB',
+      'BNP',
+      'Holter Monitoring',
+      'Lipid Profile',
+    ],
+  },
+  {
+    label: 'Neuro',
+    tests: [
+      'EEG',
+      'EMG',
+      'NCV',
+      'MRI Brain',
+      'CT Brain',
+      'Carotid Doppler',
+      'Lumbar Puncture Analysis',
+    ],
+  },
+  {
+    label: 'Nefro',
+    tests: [
+      'Serum Creatinine',
+      'Blood Urea Nitrogen',
+      'Uric Acid',
+      'Electrolytes',
+      'Urine Routine',
+      'Urine Culture',
+      'Microalbuminuria',
+      'Renal Function Test',
+      'Kidney Ultrasound',
+    ],
+  },
+];
+
 const DoctorDashboard = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const [searchToken, setSearchToken] = useState('');
@@ -84,7 +180,52 @@ const DoctorDashboard = () => {
     notes: '',
     sendTo: 'pharmacy' as 'pharmacy' | 'lab',
   });
+  const [selectedLabCategory, setSelectedLabCategory] = useState('');
+  const [showLabTestSuggestions, setShowLabTestSuggestions] = useState(false);
   const [todayStats, setTodayStats] = useState({ waiting: 0, inConsultation: 0, completed: 0 });
+
+  const getSelectedTests = () => diagnosisForm.testsRecommended
+    .split(',')
+    .map(test => test.trim())
+    .filter(Boolean);
+
+  const getCurrentTestQuery = () => {
+    const parts = diagnosisForm.testsRecommended.split(',');
+    return parts[parts.length - 1]?.trim().toLowerCase() || '';
+  };
+
+  const selectedCategoryTests = LAB_TEST_CATEGORIES.find(category => category.label === selectedLabCategory)?.tests || [];
+  const selectedTests = getSelectedTests();
+  const currentTestQuery = getCurrentTestQuery();
+  const filteredLabTestSuggestions = selectedCategoryTests
+    .filter(test => !selectedTests.some(selected => selected.toLowerCase() === test.toLowerCase()))
+    .filter(test => !currentTestQuery || test.toLowerCase().includes(currentTestQuery))
+    .slice(0, 8);
+
+  const handleSelectLabCategory = (category: string) => {
+    setSelectedLabCategory(category);
+    setShowLabTestSuggestions(true);
+  };
+
+  const handleAddLabTest = (test: string) => {
+    const existingTests = getSelectedTests();
+    if (existingTests.some(existing => existing.toLowerCase() === test.toLowerCase())) {
+      return;
+    }
+
+    setDiagnosisForm({
+      ...diagnosisForm,
+      testsRecommended: [...existingTests, test].join(', '),
+    });
+    setShowLabTestSuggestions(true);
+  };
+
+  const handleRemoveLabTest = (test: string) => {
+    setDiagnosisForm({
+      ...diagnosisForm,
+      testsRecommended: getSelectedTests().filter(selected => selected !== test).join(', '),
+    });
+  };
 
   // Fetch today's stats only (not patient list)
   const fetchTodayStats = async () => {
@@ -172,6 +313,8 @@ const DoctorDashboard = () => {
 
       // Reset form and clear selection
       setDiagnosisForm({ disease: '', prescription: '', medicines: '', testsRecommended: '', notes: '', sendTo: 'pharmacy' });
+      setSelectedLabCategory('');
+      setShowLabTestSuggestions(false);
       setShowDiagnosisModal(false);
       setSelectedToken(null);
       setPatientHistory(null);
@@ -544,13 +687,74 @@ const DoctorDashboard = () => {
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">Lab Tests Required (comma separated)</label>
-                <input
-                  type="text"
-                  value={diagnosisForm.testsRecommended}
-                  onChange={(e) => setDiagnosisForm({ ...diagnosisForm, testsRecommended: e.target.value })}
-                  placeholder="CBC, Blood Sugar, Lipid Profile (leave empty if none)"
-                  className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {LAB_TEST_CATEGORIES.map((category) => (
+                      <button
+                        key={category.label}
+                        type="button"
+                        onClick={() => handleSelectLabCategory(category.label)}
+                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                          selectedLabCategory === category.label
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-background text-muted-foreground hover:border-primary/60 hover:text-foreground'
+                        }`}
+                      >
+                        {category.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedTests.length > 0 && (
+                    <div className="flex flex-wrap gap-2 rounded-xl bg-muted/60 p-3">
+                      {selectedTests.map((test) => (
+                        <button
+                          key={test}
+                          type="button"
+                          onClick={() => handleRemoveLabTest(test)}
+                          className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground"
+                        >
+                          {test}
+                          <X className="h-3 w-3" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={diagnosisForm.testsRecommended}
+                      onChange={(e) => {
+                        setDiagnosisForm({ ...diagnosisForm, testsRecommended: e.target.value });
+                        setShowLabTestSuggestions(true);
+                      }}
+                      onFocus={() => setShowLabTestSuggestions(true)}
+                      placeholder={
+                        selectedLabCategory
+                          ? `Search ${selectedLabCategory} tests...`
+                          : 'Select a category first, then search tests'
+                      }
+                      className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {showLabTestSuggestions && selectedLabCategory && filteredLabTestSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-xl border border-border bg-background shadow-lg">
+                        {filteredLabTestSuggestions.map((test) => (
+                          <button
+                            key={test}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleAddLabTest(test)}
+                            className="flex w-full items-center gap-2 border-b border-border px-4 py-3 text-left text-sm last:border-0 hover:bg-muted"
+                          >
+                            <FlaskConical className="h-4 w-4 text-primary" />
+                            <span>{test}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">If tests are added, patient will be sent to Lab first</p>
               </div>
               <div>
