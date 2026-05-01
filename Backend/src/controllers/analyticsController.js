@@ -742,6 +742,654 @@ const getAreaDiseaseDistribution = async (req, res) => {
   }
 };
 
+/**
+ * Get doctor performance analytics
+ * GET /api/analytics/doctor-performance
+ * Analyzes consultations per doctor, avg time, patient ratings etc.
+ */
+const getDoctorPerformance = async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setHours(0, 0, 0, 0);
+
+    // Consultations per doctor
+    const doctorConsultations = await Token.aggregate([
+      {
+        $match: { 
+          createdAt: { $gte: startDate },
+          assignedDoctor: { $exists: true }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedDoctor',
+          foreignField: '_id',
+          as: 'doctor'
+        }
+      },
+      { $unwind: '$doctor' },
+      {
+        $group: {
+          _id: '$assignedDoctor',
+          doctorName: { $first: '$doctor.name' },
+          department: { $first: '$doctor.department' },
+          totalPatients: { $sum: 1 },
+          completed: {
+            $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+          },
+          inProgress: {
+            $sum: { $cond: [{ $ne: ['$status', 'completed'] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $addFields: {
+          completionRate: {
+            $multiply: [
+              { $divide: ['$completed', { $max: ['$totalPatients', 1] }] },
+              100
+            ]
+          }
+        }
+      },
+      { $sort: { totalPatients: -1 } }
+    ]);
+
+    // Diagnoses per doctor with disease breakdown
+    const doctorDiagnoses = await Diagnosis.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'doctorId',
+          foreignField: '_id',
+          as: 'doctor'
+        }
+      },
+      { $unwind: '$doctor' },
+      {
+        $group: {
+          _id: '$doctorId',
+          doctorName: { $first: '$doctor.name' },
+          totalDiagnoses: { $sum: 1 },
+          uniqueDiseases: { $addToSet: '$disease' },
+          diseases: {
+            $push: '$disease'
+          }
+        }
+      },
+      {
+        $addFields: {
+          topDiseases: {
+            $slice: [
+              {
+                $sortArray: {
+                  input: {
+                    $map: {
+                      input: { $setUnion: ['$diseases'] },
+                      as: 'disease',
+                      in: {
+                        disease: '$$disease',
+                        count: {
+                          $size: {
+                            $filter: {
+                              input: '$diseases',
+                              cond: { $eq: ['$$this', '$$disease'] }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  sortBy: { count: -1 }
+                }
+              },
+              5
+            ]
+          },
+          uniqueDiseaseCount: { $size: '$uniqueDiseases' }
+        }
+      },
+      {
+        $project: {
+          doctorName: 1,
+          totalDiagnoses: 1,
+          uniqueDiseaseCount: 1,
+          topDiseases: 1
+        }
+      },
+      { $sort: { totalDiagnoses: -1 } }
+    ]);
+
+    // Daily consultations by doctor
+    const dailyByDoctor = await Token.aggregate([
+      {
+        $match: { 
+          createdAt: { $gte: startDate },
+          assignedDoctor: { $exists: true }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedDoctor',
+          foreignField: '_id',
+          as: 'doctor'
+        }
+      },
+      { $unwind: '$doctor' },
+      {
+        $group: {
+          _id: {
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            doctorId: '$assignedDoctor'
+          },
+          doctorName: { $first: '$doctor.name' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        doctorConsultations,
+        doctorDiagnoses,
+        dailyByDoctor,
+        period: {
+          startDate,
+          endDate: new Date()
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching doctor performance',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get peak hours analytics
+ * GET /api/analytics/peak-hours
+ * Identifies busy hours and days for the hospital
+ */
+const getPeakHours = async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setHours(0, 0, 0, 0);
+
+    // Hourly distribution
+    const hourlyDistribution = await Token.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: { $hour: '$createdAt' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          hour: '$_id',
+          count: 1,
+          timeSlot: {
+            $concat: [
+              { $toString: '$_id' },
+              ':00 - ',
+              { $toString: { $add: ['$_id', 1] } },
+              ':00'
+            ]
+          }
+        }
+      }
+    ]);
+
+    // Day of week distribution
+    const dayOfWeekDistribution = await Token.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: { $dayOfWeek: '$createdAt' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          dayNumber: '$_id',
+          count: 1,
+          dayName: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id', 1] }, then: 'Sunday' },
+                { case: { $eq: ['$_id', 2] }, then: 'Monday' },
+                { case: { $eq: ['$_id', 3] }, then: 'Tuesday' },
+                { case: { $eq: ['$_id', 4] }, then: 'Wednesday' },
+                { case: { $eq: ['$_id', 5] }, then: 'Thursday' },
+                { case: { $eq: ['$_id', 6] }, then: 'Friday' },
+                { case: { $eq: ['$_id', 7] }, then: 'Saturday' }
+              ],
+              default: 'Unknown'
+            }
+          }
+        }
+      }
+    ]);
+
+    // Department-wise peak hours
+    const departmentPeakHours = await Token.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: {
+            department: '$department',
+            hour: { $hour: '$createdAt' }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.department',
+          hourlyData: {
+            $push: {
+              hour: '$_id.hour',
+              count: '$count'
+            }
+          },
+          totalTokens: { $sum: '$count' }
+        }
+      },
+      {
+        $addFields: {
+          peakHour: {
+            $first: {
+              $sortArray: {
+                input: '$hourlyData',
+                sortBy: { count: -1 }
+              }
+            }
+          }
+        }
+      },
+      { $sort: { totalTokens: -1 } }
+    ]);
+
+    // Find peak hour
+    const peakHour = hourlyDistribution.reduce(
+      (max, item) => item.count > max.count ? item : max,
+      { count: 0, hour: 0 }
+    );
+
+    // Find peak day
+    const peakDay = dayOfWeekDistribution.reduce(
+      (max, item) => item.count > max.count ? item : max,
+      { count: 0, dayName: 'Unknown' }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        hourlyDistribution,
+        dayOfWeekDistribution,
+        departmentPeakHours,
+        insights: {
+          peakHour: peakHour.hour,
+          peakHourCount: peakHour.count,
+          peakDay: peakDay.dayName,
+          peakDayCount: peakDay.count
+        },
+        period: {
+          startDate,
+          endDate: new Date()
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching peak hours',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get patient flow analytics
+ * GET /api/analytics/patient-flow
+ * Analyzes patient journey through different departments
+ */
+const getPatientFlow = async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setHours(0, 0, 0, 0);
+
+    // Average time in each status
+    const avgTimeByStatus = await Token.aggregate([
+      {
+        $match: { 
+          createdAt: { $gte: startDate },
+          status: 'completed'
+        }
+      },
+      {
+        $project: {
+          waitTime: {
+            $cond: {
+              if: { $and: ['$consultationStartTime', '$createdAt'] },
+              then: { $subtract: ['$consultationStartTime', '$createdAt'] },
+              else: null
+            }
+          },
+          doctorTime: {
+            $cond: {
+              if: { $and: ['$labStartTime', '$consultationStartTime'] },
+              then: { $subtract: ['$labStartTime', '$consultationStartTime'] },
+              else: null
+            }
+          },
+          totalTime: {
+            $cond: {
+              if: { $and: ['$completedAt', '$createdAt'] },
+              then: { $subtract: ['$completedAt', '$createdAt'] },
+              else: null
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          avgWaitTime: { $avg: '$waitTime' },
+          avgDoctorTime: { $avg: '$doctorTime' },
+          avgTotalTime: { $avg: '$totalTime' },
+          minTotalTime: { $min: '$totalTime' },
+          maxTotalTime: { $max: '$totalTime' }
+        }
+      }
+    ]);
+
+    // Status transition analysis
+    const statusTransitions = await Token.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          status: '$_id',
+          count: 1,
+          percentage: { $multiply: [{ $divide: ['$count', 1] }, 100] }
+        }
+      }
+    ]);
+
+    // Calculate total for percentage
+    const total = statusTransitions.reduce((sum, item) => sum + item.count, 0);
+    statusTransitions.forEach(item => {
+      item.percentage = ((item.count / total) * 100).toFixed(2);
+    });
+
+    // Department flow
+    const departmentFlow = await Token.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: {
+            department: '$department',
+            status: '$status'
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.department',
+          statusBreakdown: {
+            $push: {
+              status: '$_id.status',
+              count: '$count'
+            }
+          },
+          total: { $sum: '$count' }
+        }
+      },
+      { $sort: { total: -1 } }
+    ]);
+
+    // Priority-wise flow
+    const priorityFlow = await Token.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: '$priority',
+          total: { $sum: 1 },
+          completed: {
+            $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $addFields: {
+          completionRate: {
+            $multiply: [
+              { $divide: ['$completed', { $max: ['$total', 1] }] },
+              100
+            ]
+          }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        avgTimeByStatus: avgTimeByStatus[0] || {},
+        statusTransitions,
+        departmentFlow,
+        priorityFlow,
+        period: {
+          startDate,
+          endDate: new Date()
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching patient flow',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get lab analytics
+ * GET /api/analytics/lab-analytics
+ * Comprehensive lab test analytics
+ */
+const getLabAnalytics = async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setHours(0, 0, 0, 0);
+
+    // Test status distribution
+    const testStatusDistribution = await LabReport.aggregate([
+      {
+        $match: { reportDate: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Most ordered tests
+    const mostOrderedTests = await LabReport.aggregate([
+      {
+        $match: { reportDate: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: '$testName',
+          count: { $sum: 1 },
+          normalCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'normal'] }, 1, 0] }
+          },
+          abnormalCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'abnormal'] }, 1, 0] }
+          },
+          criticalCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'critical'] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $addFields: {
+          abnormalRate: {
+            $multiply: [
+              { $divide: [{ $add: ['$abnormalCount', '$criticalCount'] }, { $max: ['$count', 1] }] },
+              100
+            ]
+          }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 15 }
+    ]);
+
+    // Daily test volume
+    const dailyTestVolume = await LabReport.aggregate([
+      {
+        $match: { reportDate: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$reportDate' } },
+          count: { $sum: 1 },
+          normalCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'normal'] }, 1, 0] }
+          },
+          abnormalCount: {
+            $sum: { $cond: [{ $ne: ['$status', 'normal'] }, 1, 0] }
+          }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Test category distribution
+    const testCategoryDistribution = await LabReport.aggregate([
+      {
+        $match: { 
+          reportDate: { $gte: startDate },
+          testCategory: { $exists: true }
+        }
+      },
+      {
+        $group: {
+          _id: '$testCategory',
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    // Critical results requiring immediate attention
+    const criticalResults = await LabReport.aggregate([
+      {
+        $match: { 
+          reportDate: { $gte: startDate },
+          status: 'critical'
+        }
+      },
+      {
+        $lookup: {
+          from: 'tokens',
+          localField: 'tokenId',
+          foreignField: '_id',
+          as: 'token'
+        }
+      },
+      { $unwind: { path: '$token', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'patients',
+          localField: 'token.patientId',
+          foreignField: '_id',
+          as: 'patient'
+        }
+      },
+      { $unwind: { path: '$patient', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          testName: 1,
+          result: 1,
+          normalRange: 1,
+          reportDate: 1,
+          patientName: '$patient.name',
+          tokenNumber: '$token.tokenNumber'
+        }
+      },
+      { $sort: { reportDate: -1 } },
+      { $limit: 10 }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        testStatusDistribution,
+        mostOrderedTests,
+        dailyTestVolume,
+        testCategoryDistribution,
+        criticalResults,
+        period: {
+          startDate,
+          endDate: new Date()
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching lab analytics',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getPatientTrends,
   getDepartmentLoad,
@@ -749,5 +1397,9 @@ module.exports = {
   getDashboardSummary,
   getDiseaseTrends,
   getMedicineUsage,
-  getAreaDiseaseDistribution
+  getAreaDiseaseDistribution,
+  getDoctorPerformance,
+  getPeakHours,
+  getPatientFlow,
+  getLabAnalytics
 };

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -80,6 +80,8 @@ export const tokenAPI = {
     api.put(`/api/token/${id}/status`, { status }),
   getByPatient: (patientId: string) => 
     api.get(`/api/token/patient/${patientId}`),
+  searchByTokenNumber: (tokenNumber: string) =>
+    api.get(`/api/token/search/${tokenNumber}`),
 };
 
 // Doctor API
@@ -136,7 +138,7 @@ export const pharmacyAPI = {
     api.get(`/api/pharmacy/prescription/${tokenId}`),
   issueMedicines: (data: {
     tokenId: string;
-    medicines: Array<{ name: string; quantity: number; price?: number }>;
+    medicines: Array<{ medicineName: string; quantity: number; dosage?: string }>;
     paymentStatus?: 'pending' | 'paid' | 'partial';
     totalAmount?: number;
     notes?: string;
@@ -157,6 +159,90 @@ export const analyticsAPI = {
     api.get('/api/analytics/department-stats'),
   getRevenueStats: (params?: { period?: string }) => 
     api.get('/api/analytics/revenue', { params }),
+  getDiseaseTrends: (params?: { period?: string; limit?: number }) =>
+    api.get('/api/analytics/disease-trends', { params }),
+  getMedicineUsage: (params?: { period?: string; limit?: number }) =>
+    api.get('/api/analytics/medicine-usage', { params }),
+  getAreaDiseaseDistribution: (params?: { area?: string }) =>
+    api.get('/api/analytics/area-disease-distribution', { params }),
+};
+
+// Prediction API - AI Disease Prediction
+export const predictionAPI = {
+  // Predict disease from symptoms
+  predictDisease: (symptoms: string[]) =>
+    api.post('/api/predict-disease', { symptoms }),
+  
+  // Get all diseases in dataset
+  getDataset: (params?: { category?: string; search?: string }) =>
+    api.get('/api/predict-disease/dataset', { params }),
+  
+  // Search/autocomplete diseases
+  searchDiseases: (query: string, limit?: number) =>
+    api.get('/api/predict-disease/search', { params: { q: query, limit } }),
+  
+  // Get disease details
+  getDiseaseDetails: (identifier: string) =>
+    api.get(`/api/predict-disease/disease/${identifier}`),
+  
+  // Auto-suggest medicines for a disease
+  suggestMedicines: (disease: string) =>
+    api.get('/api/predict-disease/suggest-medicines', { params: { disease } }),
+  
+  // Get all symptoms for autocomplete
+  getSymptomsList: () =>
+    api.get('/api/predict-disease/symptoms'),
+  
+  // Get all medicines for autocomplete
+  getMedicinesList: (search?: string) =>
+    api.get('/api/predict-disease/medicines', { params: { search } }),
+  
+  // Get all tests for autocomplete
+  getTestsList: (search?: string) =>
+    api.get('/api/predict-disease/tests', { params: { search } }),
+  
+  // Get disease categories
+  getCategories: () =>
+    api.get('/api/predict-disease/categories'),
+  
+  // Add disease to dataset (Admin only)
+  addDisease: (data: {
+    disease: string;
+    symptoms: string[];
+    recommendedTests?: string[];
+    recommendedMedicines?: string[];
+    healthAdvice?: string;
+    category?: string;
+    severity?: 'mild' | 'moderate' | 'severe';
+  }) => api.post('/api/predict-disease/dataset', data),
+};
+
+// Patient Reports API
+export const patientReportAPI = {
+  upload: (data: {
+    patientId: string;
+    tokenId?: string;
+    reportType?: string;
+    title: string;
+    description?: string;
+    reportDate?: string;
+    fileData?: string;
+    fileName?: string;
+    fileType?: string;
+    notes?: string;
+  }) => api.post('/api/patient-reports/upload', data),
+  
+  getPatientReports: (patientId: string) =>
+    api.get(`/api/patient-reports/patient/${patientId}`),
+  
+  getReportById: (reportId: string) =>
+    api.get(`/api/patient-reports/${reportId}`),
+    
+  deleteReport: (reportId: string) =>
+    api.delete(`/api/patient-reports/${reportId}`),
+    
+  searchPatient: (query: string) =>
+    api.get('/api/patient-reports/search-patient', { params: { q: query } }),
 };
 
 export default api;

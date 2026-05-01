@@ -116,9 +116,14 @@ const getPendingTests = async (req, res) => {
         const completedReports = await LabReport.find({ tokenId: token._id })
           .select('testName');
         
+        // Extract test names from testsRecommended objects
+        const recommendedTestNames = (diagnosis?.testsRecommended || []).map(t => 
+          typeof t === 'object' ? t.testName : t
+        );
+        
         return {
           ...token.toObject(),
-          recommendedTests: diagnosis?.testsRecommended || [],
+          recommendedTests: recommendedTestNames,
           completedTests: completedReports.map(r => r.testName)
         };
       })

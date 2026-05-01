@@ -14,12 +14,34 @@ interface AuthState {
   loading: boolean;
 }
 
-const initialState: AuthState = {
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  loading: false,
+// Load initial state from localStorage
+const loadAuthFromStorage = (): AuthState => {
+  try {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    if (token && userStr) {
+      const user = JSON.parse(userStr);
+      return {
+        user,
+        token,
+        isAuthenticated: true,
+        loading: false,
+      };
+    }
+  } catch (e) {
+    // Invalid stored data, clear it
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }
+  return {
+    user: null,
+    token: null,
+    isAuthenticated: false,
+    loading: false,
+  };
 };
+
+const initialState: AuthState = loadAuthFromStorage();
 
 const authSlice = createSlice({
   name: 'auth',

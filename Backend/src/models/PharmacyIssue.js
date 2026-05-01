@@ -35,7 +35,7 @@ const pharmacyIssueSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid', 'insurance', 'waived'],
+    enum: ['pending', 'paid', 'partial', 'insurance', 'waived'],
     default: 'pending'
   },
   totalAmount: {

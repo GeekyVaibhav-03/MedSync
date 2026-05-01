@@ -82,7 +82,7 @@ const LoginPage = () => {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-foreground/20">
               <Heart className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-primary-foreground">MediFlow</span>
+            <span className="text-2xl font-bold text-primary-foreground">MedSync</span>
           </div>
           <h2 className="text-3xl font-bold text-primary-foreground mb-4">
             Welcome back to your healthcare dashboard
@@ -108,7 +108,7 @@ const LoginPage = () => {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary">
               <Heart className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold text-foreground">MediFlow</span>
+            <span className="text-xl font-bold text-foreground">MedSync</span>
           </div>
 
           <h1 className="text-2xl font-bold text-foreground mb-2">Sign in to your account</h1>

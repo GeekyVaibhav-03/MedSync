@@ -29,6 +29,17 @@ const addDiagnosis = async (req, res) => {
       });
     }
 
+    // Transform testsRecommended to proper format if they are strings
+    let formattedTests = [];
+    if (testsRecommended && Array.isArray(testsRecommended)) {
+      formattedTests = testsRecommended.map(test => {
+        if (typeof test === 'string') {
+          return { testName: test, urgency: 'routine' };
+        }
+        return test;
+      });
+    }
+
     // Create diagnosis/consultation
     const diagnosis = await Diagnosis.create({
       tokenId,
@@ -37,14 +48,14 @@ const addDiagnosis = async (req, res) => {
       symptoms,
       prescription,
       medicines,
-      testsRecommended,
+      testsRecommended: formattedTests,
       healthAdvice,
       notes,
       followUpDate
     });
 
     // Update token status based on tests recommended
-    const newStatus = testsRecommended && testsRecommended.length > 0 ? 'lab' : 'pharmacy';
+    const newStatus = formattedTests && formattedTests.length > 0 ? 'lab' : 'pharmacy';
     await Token.findByIdAndUpdate(tokenId, { status: newStatus });
 
     res.status(201).json({

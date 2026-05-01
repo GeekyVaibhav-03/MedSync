@@ -208,10 +208,87 @@ const getTokensByPatient = async (req, res) => {
   }
 };
 
+/**
+ * Search token by token number
+ * GET /api/token/search/:tokenNumber
+ */
+const searchByTokenNumber = async (req, res) => {
+  try {
+    const { tokenNumber } = req.params;
+
+    const token = await Token.findOne({ 
+      tokenNumber: { $regex: tokenNumber, $options: 'i' } 
+    })
+      .populate('patientId', 'name age gender phone address')
+      .populate('assignedDoctor', 'name department');
+
+    if (!token) {
+      return res.status(404).json({
+        success: false,
+        message: 'Token not found'
+      });
+    }
+
+    // Get patient's previous visit history
+    const Diagnosis = require('../models/Diagnosis');
+    const LabReport = require('../models/LabReport');
+    const PatientReport = require('../models/PatientReport');
+
+    // Get all previous tokens for this patient
+    const previousTokens = await Token.find({ 
+      patientId: token.patientId._id,
+      _id: { $ne: token._id }
+    }).sort({ createdAt: -1 });
+
+    const previousTokenIds = previousTokens.map(t => t._id);
+
+    // Get all previous diagnoses
+    const previousDiagnoses = await Diagnosis.find({ 
+      tokenId: { $in: previousTokenIds } 
+    })
+      .populate('doctorId', 'name department')
+      .sort({ createdAt: -1 });
+
+    // Get all previous lab reports
+    const previousLabReports = await LabReport.find({ 
+      tokenId: { $in: previousTokenIds } 
+    })
+      .sort({ reportDate: -1 });
+
+    // Get all patient reports uploaded by receptionist
+    const patientReports = await PatientReport.find({
+      patientId: token.patientId._id
+    })
+      .populate('uploadedBy', 'name role')
+      .select('-fileData')
+      .sort({ reportDate: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        token,
+        patientHistory: {
+          totalPreviousVisits: previousTokens.length,
+          previousDiagnoses,
+          previousLabReports,
+          patientReports
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error searching token',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   generateToken,
   getTokenQueue,
   getTokenById,
   updateTokenStatus,
-  getTokensByPatient
+  getTokensByPatient,
+  searchByTokenNumber
 };

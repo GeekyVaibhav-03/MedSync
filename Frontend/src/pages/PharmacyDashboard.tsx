@@ -63,15 +63,24 @@ const PharmacyDashboard = () => {
     setSubmitting(true);
 
     try {
-      const medicines = dispenseForm.medicines.split(',').map((m, i) => ({
-        name: m.trim(),
-        quantity: 1,
-        price: 100,
-      }));
+      // Auto-populate from prescription if dispenseForm.medicines is empty
+      let medicinesToDispense = [];
+      if (dispenseForm.medicines.trim()) {
+        medicinesToDispense = dispenseForm.medicines.split(',').map(m => ({
+          medicineName: m.trim(),
+          quantity: 1,
+        }));
+      } else if (selectedPrescription.prescription?.medicines) {
+        // Use prescribed medicines if no custom input
+        medicinesToDispense = selectedPrescription.prescription.medicines.map(m => ({
+          medicineName: m.name,
+          quantity: 1,
+        }));
+      }
 
       await pharmacyAPI.issueMedicines({
         tokenId: selectedPrescription._id,
-        medicines,
+        medicines: medicinesToDispense,
         paymentStatus: dispenseForm.paymentStatus as 'pending' | 'paid' | 'partial',
         totalAmount: parseFloat(dispenseForm.totalAmount) || 0,
         notes: dispenseForm.notes,

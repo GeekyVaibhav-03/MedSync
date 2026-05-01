@@ -3,13 +3,13 @@ import { motion } from 'framer-motion';
 import { 
   UserPlus, Ticket, Users, Clock, Search, CheckCircle, 
   User, Phone, MapPin, Calendar, Heart, AlertCircle, 
-  ChevronRight, Printer, Activity, RefreshCw
+  ChevronRight, Printer, Activity, RefreshCw, FileUp, FileText, X
 } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 import { Button } from '@/components/ui/button';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
-import { patientAPI, tokenAPI } from '@/services/api';
+import { patientAPI, tokenAPI, patientReportAPI } from '@/services/api';
 
 interface PatientForm {
   name: string;
@@ -62,6 +62,79 @@ const ReceptionistDashboard = () => {
   const [tokens, setTokens] = useState<TokenData[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(true);
   const [error, setError] = useState('');
+  
+  // Report upload state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [searchedPatients, setSearchedPatients] = useState<Array<{_id: string; name: string; age: number; gender: string; phone?: string}>>([]);
+  const [selectedPatient, setSelectedPatient] = useState<{_id: string; name: string; age: number; gender: string; phone?: string} | null>(null);
+  const [reportForm, setReportForm] = useState({
+    title: '',
+    reportType: 'other',
+    description: '',
+    notes: '',
+    fileData: '',
+    fileName: '',
+    fileType: ''
+  });
+  const [uploadingReport, setUploadingReport] = useState(false);
+
+  // Search patients for report upload
+  const handlePatientSearch = async () => {
+    if (patientSearchQuery.length < 2) return;
+    try {
+      const response = await patientReportAPI.searchPatient(patientSearchQuery);
+      setSearchedPatients(response.data.data || []);
+    } catch (err) {
+      console.error('Error searching patients:', err);
+    }
+  };
+
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReportForm({
+          ...reportForm,
+          fileData: reader.result as string,
+          fileName: file.name,
+          fileType: file.type
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload report
+  const handleUploadReport = async () => {
+    if (!selectedPatient || !reportForm.title) return;
+    setUploadingReport(true);
+    try {
+      await patientReportAPI.upload({
+        patientId: selectedPatient._id,
+        title: reportForm.title,
+        reportType: reportForm.reportType,
+        description: reportForm.description,
+        notes: reportForm.notes,
+        fileData: reportForm.fileData,
+        fileName: reportForm.fileName,
+        fileType: reportForm.fileType
+      });
+      
+      // Reset form
+      setReportForm({ title: '', reportType: 'other', description: '', notes: '', fileData: '', fileName: '', fileType: '' });
+      setSelectedPatient(null);
+      setSearchedPatients([]);
+      setPatientSearchQuery('');
+      setShowReportModal(false);
+    } catch (err) {
+      console.error('Error uploading report:', err);
+    } finally {
+      setUploadingReport(false);
+    }
+  };
 
   // Fetch today's tokens
   const fetchTokens = async () => {
@@ -183,6 +256,10 @@ const ReceptionistDashboard = () => {
           <p className="text-muted-foreground mt-1">Welcome, {user?.name || 'Receptionist'}. Register patients and generate tokens.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => setShowReportModal(true)} className="gap-2">
+            <FileUp className="h-4 w-4" />
+            Upload Report
+          </Button>
           <Button variant="outline" size="sm" onClick={fetchTokens} className="gap-2">
             <RefreshCw className={`h-4 w-4 ${loadingTokens ? 'animate-spin' : ''}`} />
             Refresh
@@ -523,6 +600,170 @@ const ReceptionistDashboard = () => {
                 </Button>
               </div>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Report Upload Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-background rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <FileUp className="h-5 w-5" /> Upload Patient Report
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => {
+                setShowReportModal(false);
+                setSelectedPatient(null);
+                setSearchedPatients([]);
+                setPatientSearchQuery('');
+                setReportForm({ title: '', reportType: 'other', description: '', notes: '', fileData: '', fileName: '', fileType: '' });
+              }}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Patient Search */}
+            {!selectedPatient ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Search Patient</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 flex items-center gap-2 rounded-xl bg-muted px-4 py-3">
+                      <Search className="h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Search by name or phone..."
+                        value={patientSearchQuery}
+                        onChange={(e) => setPatientSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handlePatientSearch()}
+                        className="bg-transparent text-sm outline-none placeholder:text-muted-foreground flex-1"
+                      />
+                    </div>
+                    <Button onClick={handlePatientSearch}>Search</Button>
+                  </div>
+                </div>
+
+                {searchedPatients.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Select Patient:</p>
+                    {searchedPatients.map(patient => (
+                      <div
+                        key={patient._id}
+                        onClick={() => setSelectedPatient(patient)}
+                        className="p-3 rounded-xl border border-border hover:border-primary cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                            {patient.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium">{patient.name}</p>
+                            <p className="text-xs text-muted-foreground">{patient.age} yrs, {patient.gender} • {patient.phone || 'No phone'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Selected Patient */}
+                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                        {selectedPatient.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-medium">{selectedPatient.name}</p>
+                        <p className="text-xs text-muted-foreground">{selectedPatient.age} yrs, {selectedPatient.gender}</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedPatient(null)}>Change</Button>
+                  </div>
+                </div>
+
+                {/* Report Form */}
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Report Title *</label>
+                  <input
+                    type="text"
+                    value={reportForm.title}
+                    onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })}
+                    placeholder="e.g., Blood Test Report, X-Ray Results"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Report Type</label>
+                  <select
+                    value={reportForm.reportType}
+                    onChange={(e) => setReportForm({ ...reportForm, reportType: e.target.value })}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="other">Other</option>
+                    <option value="lab_report">Lab Report</option>
+                    <option value="prescription">Prescription</option>
+                    <option value="xray">X-Ray</option>
+                    <option value="mri">MRI</option>
+                    <option value="ct_scan">CT Scan</option>
+                    <option value="ultrasound">Ultrasound</option>
+                    <option value="ecg">ECG</option>
+                    <option value="blood_test">Blood Test</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Upload File (Optional)</label>
+                  <input
+                    type="file"
+                    onChange={handleFileChange}
+                    accept="image/*,.pdf"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                  />
+                  {reportForm.fileName && (
+                    <p className="text-xs text-muted-foreground mt-1">Selected: {reportForm.fileName}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Description</label>
+                  <textarea
+                    value={reportForm.description}
+                    onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
+                    placeholder="Brief description of the report..."
+                    rows={2}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Notes</label>
+                  <textarea
+                    value={reportForm.notes}
+                    onChange={(e) => setReportForm({ ...reportForm, notes: e.target.value })}
+                    placeholder="Additional notes..."
+                    rows={2}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                </div>
+
+                <Button 
+                  className="w-full gap-2" 
+                  onClick={handleUploadReport} 
+                  disabled={uploadingReport || !reportForm.title}
+                >
+                  {uploadingReport ? 'Uploading...' : <><FileUp className="h-4 w-4" /> Upload Report</>}
+                </Button>
+              </div>
+            )}
           </motion.div>
         </div>
       )}

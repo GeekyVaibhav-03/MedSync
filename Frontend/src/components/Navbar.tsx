@@ -31,7 +31,7 @@ const Navbar = () => {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary">
               <Heart className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold text-foreground">MediFlow</span>
+            <span className="text-xl font-bold text-foreground">MedSync</span>
           </Link>
 
           <div className="hidden items-center gap-8 md:flex">

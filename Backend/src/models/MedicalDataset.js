@@ -27,7 +27,7 @@ const medicalDatasetSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['infectious', 'chronic', 'respiratory', 'cardiovascular', 'neurological', 'gastrointestinal', 'musculoskeletal', 'dermatological', 'other'],
+    enum: ['infectious', 'chronic', 'respiratory', 'cardiovascular', 'neurological', 'gastrointestinal', 'musculoskeletal', 'dermatological', 'urological', 'ent', 'ophthalmological', 'psychiatric', 'other'],
     default: 'other'
   },
   severity: {

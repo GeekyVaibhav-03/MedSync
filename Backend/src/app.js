@@ -13,7 +13,8 @@ const {
   labRoutes,
   pharmacyRoutes,
   analyticsRoutes,
-  predictionRoutes
+  predictionRoutes,
+  patientReportRoutes
 } = require('./routes');
 
 // Import middleware
@@ -69,6 +70,7 @@ app.use('/api/lab', labRoutes);
 app.use('/api/pharmacy', pharmacyRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/predict-disease', predictionRoutes);
+app.use('/api/patient-reports', patientReportRoutes);
 
 // Error handling
 app.use(notFound);

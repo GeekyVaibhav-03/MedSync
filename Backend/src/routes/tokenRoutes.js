@@ -5,7 +5,8 @@ const {
   getTokenQueue,
   getTokenById,
   updateTokenStatus,
-  getTokensByPatient
+  getTokensByPatient,
+  searchByTokenNumber
 } = require('../controllers/tokenController');
 const { authenticateUser, authorizeRole } = require('../middleware/auth');
 
@@ -17,6 +18,9 @@ router.post('/generate', authorizeRole('receptionist', 'admin'), generateToken);
 
 // GET /api/token/queue - Get token queue
 router.get('/queue', getTokenQueue);
+
+// GET /api/token/search/:tokenNumber - Search by token number (for doctors)
+router.get('/search/:tokenNumber', searchByTokenNumber);
 
 // GET /api/token/patient/:patientId - Get tokens by patient
 router.get('/patient/:patientId', getTokensByPatient);
