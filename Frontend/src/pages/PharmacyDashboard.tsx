@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Pill, Clock, CheckCircle, Package, Search, Filter, CreditCard, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { Pill, Clock, CheckCircle, Package, Search, Filter, CreditCard, AlertCircle, RefreshCw, X, FileText } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 import { Button } from '@/components/ui/button';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
-import { pharmacyAPI } from '@/services/api';
+import { pharmacyAPI, prescriptionAPI } from '@/services/api';
 
 interface PendingPrescription {
   _id: string;
@@ -33,6 +33,7 @@ const PharmacyDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showDispenseModal, setShowDispenseModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [openingPdf, setOpeningPdf] = useState(false);
   const [dispenseForm, setDispenseForm] = useState({
     medicines: '',
     totalAmount: '',
@@ -94,6 +95,35 @@ const PharmacyDashboard = () => {
       console.error('Error dispensing:', err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleViewPrescriptionPdf = async () => {
+    if (!selectedPrescription?._id) return;
+
+    const pdfWindow = window.open('', '_blank', 'noopener,noreferrer');
+
+    try {
+      setOpeningPdf(true);
+      const response = await prescriptionAPI.getPdfUrl(selectedPrescription._id);
+      const pdfUrl = response?.data?.pdfUrl;
+
+      if (pdfUrl) {
+        if (pdfWindow) {
+          pdfWindow.location.href = pdfUrl;
+        } else {
+          window.open(pdfUrl, '_blank');
+        }
+      } else if (pdfWindow) {
+        pdfWindow.close();
+      }
+    } catch (err) {
+      console.error('Error opening prescription PDF:', err);
+      if (pdfWindow) {
+        pdfWindow.close();
+      }
+    } finally {
+      setOpeningPdf(false);
     }
   };
 
@@ -265,6 +295,15 @@ const PharmacyDashboard = () => {
                 <div className="space-y-2">
                   <Button className="w-full gap-2" onClick={() => setShowDispenseModal(true)}>
                     <CheckCircle className="h-4 w-4" /> Dispense Medicines
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={handleViewPrescriptionPdf}
+                    disabled={openingPdf}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {openingPdf ? 'Opening PDF...' : 'View Prescription PDF'}
                   </Button>
                 </div>
               </div>

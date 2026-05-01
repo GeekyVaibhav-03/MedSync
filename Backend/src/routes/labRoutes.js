@@ -5,7 +5,9 @@ const {
   getTestsByToken,
   getPendingTests,
   completeLabTests,
-  getMyReports
+  getMyReports,
+  getLabCatalog,
+  uploadLabReportFile
 } = require('../controllers/labController');
 const { authenticateUser, authorizeRole } = require('../middleware/auth');
 
@@ -13,6 +15,8 @@ const { authenticateUser, authorizeRole } = require('../middleware/auth');
 router.use(authenticateUser);
 router.use(authorizeRole('lab', 'admin'));
 
+router.get('/catalog', getLabCatalog);
+router.post('/upload', uploadLabReportFile);
 router.post('/report', addLabReport);
 router.get('/pending', getPendingTests);
 router.get('/my-reports', getMyReports);

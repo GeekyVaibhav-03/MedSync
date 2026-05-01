@@ -7,6 +7,7 @@ const pharmacyRoutes = require('./pharmacyRoutes');
 const analyticsRoutes = require('./analyticsRoutes');
 const predictionRoutes = require('./predictionRoutes');
 const patientReportRoutes = require('./patientReportRoutes');
+const prescriptionRoutes = require('./prescriptionRoutes');
 
 module.exports = {
   authRoutes,
@@ -17,5 +18,6 @@ module.exports = {
   pharmacyRoutes,
   analyticsRoutes,
   predictionRoutes,
-  patientReportRoutes
+  patientReportRoutes,
+  prescriptionRoutes
 };

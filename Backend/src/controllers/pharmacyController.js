@@ -1,6 +1,7 @@
 const PharmacyIssue = require('../models/PharmacyIssue');
 const Token = require('../models/Token');
 const Diagnosis = require('../models/Diagnosis');
+const Prescription = require('../models/Prescription');
 
 /**
  * Issue medicines
@@ -28,6 +29,40 @@ const issueMedicines = async (req, res) => {
       totalAmount,
       notes
     });
+
+    // Update linked prescription with pharmacy issue details
+    try {
+      const medicinesIssued = Array.isArray(medicines)
+        ? medicines.map((item) => ({
+            name: item?.name || item?.medicineName,
+            quantity: item?.quantity,
+            price: item?.price
+          }))
+        : [];
+
+      const updatedPrescription = await Prescription.findOneAndUpdate(
+        { tokenId },
+        {
+          $set: {
+            pharmacyData: {
+              medicinesIssued,
+              totalAmount,
+              notes,
+              pharmacistId: req.user._id,
+              createdAt: new Date()
+            },
+            status: 'completed'
+          }
+        },
+        { new: true }
+      );
+
+      if (!updatedPrescription) {
+        console.error(`Prescription not found for tokenId: ${tokenId}`);
+      }
+    } catch (prescriptionError) {
+      console.error('Error updating prescription pharmacy data:', prescriptionError.message);
+    }
 
     // Update token status to completed
     await Token.findByIdAndUpdate(tokenId, {

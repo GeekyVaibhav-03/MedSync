@@ -84,7 +84,7 @@ interface DoctorConsultationProps {
 }
 
 const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationProps) => {
-  const [activeTab, setActiveTab] = useState<'diagnosis' | 'prescription' | 'tests'>('diagnosis');
+  const [activeTab, setActiveTab] = useState<'diagnosis' | 'prescription' | 'tests' | 'notepad'>('diagnosis');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -116,6 +116,103 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
   const [prescription, setPrescription] = useState('');
   const [healthAdvice, setHealthAdvice] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Notepad State
+  const [notepadImageUrl, setNotepadImageUrl] = useState<string>('');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  // Initialize Canvas
+  useEffect(() => {
+    if (activeTab === 'notepad' && canvasRef.current) {
+      const canvas = canvasRef.current;
+      canvas.width = canvas.parentElement?.clientWidth || 600;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'black';
+        ctxRef.current = ctx;
+        // Fill white background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // If already has drawing, redraw it (simplistic approach: we just let them save before switching)
+      }
+    }
+  }, [activeTab]);
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!ctxRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Support mouse and touch
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+    
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    ctxRef.current.beginPath();
+    ctxRef.current.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !ctxRef.current) return;
+    e.preventDefault(); // prevent scrolling
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+    
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    ctxRef.current.lineTo(x, y);
+    ctxRef.current.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!ctxRef.current) return;
+    ctxRef.current.closePath();
+    setIsDrawing(false);
+    
+    // Save image URL
+    if (canvasRef.current) {
+      setNotepadImageUrl(canvasRef.current.toDataURL('image/png'));
+    }
+  };
+
+  const clearCanvas = () => {
+    if (canvasRef.current && ctxRef.current) {
+      const canvas = canvasRef.current;
+      ctxRef.current.fillStyle = 'white';
+      ctxRef.current.fillRect(0, 0, canvas.width, canvas.height);
+      setNotepadImageUrl('');
+    }
+  };
 
   const diseaseInputRef = useRef<HTMLInputElement>(null);
   const symptomInputRef = useRef<HTMLInputElement>(null);
@@ -325,6 +422,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
         medicines: medicines.filter(m => m.name),
         testsRecommended: selectedTests,
         notes: `${healthAdvice}\n\n${notes}`,
+        notepadImageUrl: notepadImageUrl || undefined
       });
 
       // Update status
@@ -562,6 +660,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                   { id: 'diagnosis', label: 'Diagnosis', icon: FileText },
                   { id: 'prescription', label: 'Prescription', icon: Pill },
                   { id: 'tests', label: 'Lab Tests', icon: FlaskConical },
+                  { id: 'notepad', label: 'Notepad', icon: FileText },
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -849,6 +948,42 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                               </div>
                             </button>
                           ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
+                {activeTab === 'notepad' && (
+                  <motion.div
+                    key="notepad"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                  >
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-lg">Canvas Notepad</CardTitle>
+                        <Button variant="destructive" size="sm" onClick={clearCanvas}>
+                          Clear Notepad
+                        </Button>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Draw your prescription or notes here. It will be attached with the diagnosis.
+                        </p>
+                        <div className="border border-border rounded-lg overflow-hidden bg-white shadow-inner cursor-crosshair relative">
+                          <canvas
+                            ref={canvasRef}
+                            onMouseDown={startDrawing}
+                            onMouseMove={draw}
+                            onMouseUp={stopDrawing}
+                            onMouseLeave={stopDrawing}
+                            onTouchStart={startDrawing}
+                            onTouchMove={draw}
+                            onTouchEnd={stopDrawing}
+                            className="bg-white block touch-none w-full"
+                          />
                         </div>
                       </CardContent>
                     </Card>

@@ -1,5 +1,6 @@
 const Diagnosis = require('../models/Diagnosis');
 const Token = require('../models/Token');
+const Prescription = require('../models/Prescription');
 
 /**
  * Add diagnosis/consultation for a token
@@ -17,6 +18,7 @@ const addDiagnosis = async (req, res) => {
       testsRecommended,
       healthAdvice,
       notes,
+      notepadImageUrl,
       followUpDate
     } = req.body;
 
@@ -56,6 +58,54 @@ const addDiagnosis = async (req, res) => {
 
     // Update token status based on tests recommended
     const newStatus = formattedTests && formattedTests.length > 0 ? 'lab' : 'pharmacy';
+
+    // Update linked prescription with doctor data and status
+    try {
+      const prescriptionSymptoms = Array.isArray(symptoms)
+        ? symptoms
+        : symptoms
+          ? [symptoms]
+          : [];
+
+      const prescriptionMedicines = Array.isArray(medicines)
+        ? medicines
+        : medicines
+          ? [medicines]
+          : [];
+
+      const prescriptionTests = Array.isArray(testsRecommended)
+        ? testsRecommended
+            .map((test) => (typeof test === 'string' ? test : test?.testName))
+            .filter(Boolean)
+        : [];
+
+      const updatedPrescription = await Prescription.findOneAndUpdate(
+        { tokenId },
+        {
+          $set: {
+            doctorData: {
+              diagnosis: disease,
+              symptoms: prescriptionSymptoms,
+              medicines: prescriptionMedicines,
+              testsRecommended: prescriptionTests,
+              notes,
+              notepadImageUrl,
+              doctorId: req.user._id,
+              createdAt: new Date()
+            },
+            status: newStatus
+          }
+        },
+        { new: true }
+      );
+
+      if (!updatedPrescription) {
+        console.error(`Prescription not found for tokenId: ${tokenId}`);
+      }
+    } catch (prescriptionError) {
+      console.error('Error updating prescription doctor data:', prescriptionError.message);
+    }
+
     await Token.findByIdAndUpdate(tokenId, { status: newStatus });
 
     res.status(201).json({

@@ -5,7 +5,7 @@ import StatCard from '@/components/StatCard';
 import { Button } from '@/components/ui/button';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
-import { labAPI } from '@/services/api';
+import { labAPI, prescriptionAPI } from '@/services/api';
 
 interface PendingTest {
   _id: string;
@@ -23,6 +23,11 @@ interface PendingTest {
   completedTests: string[];
 }
 
+interface LabCategory {
+  category: string;
+  tests: string[];
+}
+
 const LabDashboard = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const [pendingTests, setPendingTests] = useState<PendingTest[]>([]);
@@ -31,6 +36,12 @@ const LabDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showResultModal, setShowResultModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // New Lab Catalog state
+  const [labCatalog, setLabCatalog] = useState<LabCategory[]>([]);
+  const [testSearchQuery, setTestSearchQuery] = useState('');
+  const [uploadingReport, setUploadingReport] = useState(false);
+
   const [resultForm, setResultForm] = useState({
     testName: '',
     result: '',
@@ -38,6 +49,8 @@ const LabDashboard = () => {
     unit: '',
     status: 'normal',
     remarks: '',
+    reportFileUrl: '',
+    fileData: ''
   });
 
   const fetchPendingTests = async () => {
@@ -52,17 +65,59 @@ const LabDashboard = () => {
     }
   };
 
+  const fetchLabCatalog = async (query = '') => {
+    try {
+      const response = await labAPI.getLabCatalog(query);
+      setLabCatalog(response.data.data || []);
+    } catch (err) {
+      console.error('Error fetching lab catalog:', err);
+    }
+  };
+
   useEffect(() => {
     fetchPendingTests();
+    fetchLabCatalog();
     const interval = setInterval(fetchPendingTests, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Debounced search for catalog
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchLabCatalog(testSearchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [testSearchQuery]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setResultForm(prev => ({
+          ...prev,
+          fileData: reader.result as string
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleAddResult = async () => {
     if (!selectedTest || !resultForm.testName) return;
     setSubmitting(true);
 
     try {
+      let finalReportUrl = resultForm.reportFileUrl;
+
+      // Handle upload if file data exists
+      if (resultForm.fileData && !finalReportUrl) {
+        setUploadingReport(true);
+        const uploadRes = await labAPI.uploadLabReportFile({ fileData: resultForm.fileData });
+        finalReportUrl = uploadRes.data.data.reportFileUrl;
+        setUploadingReport(false);
+      }
+
       await labAPI.addReport({
         tokenId: selectedTest._id,
         testName: resultForm.testName,
@@ -71,13 +126,15 @@ const LabDashboard = () => {
         unit: resultForm.unit,
         status: resultForm.status as 'normal' | 'abnormal' | 'critical',
         remarks: resultForm.remarks,
+        reportFileUrl: finalReportUrl
       });
 
-      setResultForm({ testName: '', result: '', normalRange: '', unit: '', status: 'normal', remarks: '' });
+      setResultForm({ testName: '', result: '', normalRange: '', unit: '', status: 'normal', remarks: '', reportFileUrl: '', fileData: '' });
       setShowResultModal(false);
       fetchPendingTests();
     } catch (err) {
       console.error('Error adding result:', err);
+      setUploadingReport(false);
     } finally {
       setSubmitting(false);
     }
@@ -263,7 +320,28 @@ const LabDashboard = () => {
                     <FileText className="h-4 w-4" /> Add Test Result
                   </Button>
                   <Button variant="outline" className="w-full gap-2" onClick={() => handleCompleteAndSend(selectedTest)}>
-                    <Send className="h-4 w-4" /> Complete & Send to Pharmacy
+                    <Send className="h-4 w-4" /> Complete & Send to Doctor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2 text-primary border-primary hover:bg-primary/5"
+                    onClick={async () => {
+                      const pdfWindow = window.open('', '_blank');
+                      if (pdfWindow) pdfWindow.document.write('Loading Digital Prescription...');
+                      try {
+                        const res = await prescriptionAPI.getPdfUrl(selectedTest._id);
+                        if (res.data.data.pdfUrl && pdfWindow) {
+                          pdfWindow.location.href = res.data.data.pdfUrl;
+                        } else if (pdfWindow) {
+                          pdfWindow.document.write('Error: Could not load the prescription.');
+                        }
+                      } catch (err) {
+                        if (pdfWindow) pdfWindow.document.write('Error loading prescription PDF.');
+                        console.error(err);
+                      }
+                    }}
+                  >
+                    <FileText className="h-4 w-4" /> View Digital Prescription
                   </Button>
                 </div>
               </div>
@@ -289,7 +367,7 @@ const LabDashboard = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="h-6 w-6 rounded-full bg-warning/20 flex items-center justify-center text-xs font-bold text-warning">4</div>
-                  <span>Send to pharmacy</span>
+                  <span>Send to doctor</span>
                 </div>
               </div>
             </div>
@@ -299,11 +377,11 @@ const LabDashboard = () => {
 
       {/* Add Result Modal */}
       {showResultModal && selectedTest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-background rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl"
+            className="bg-background rounded-2xl p-6 max-w-2xl w-full shadow-2xl"
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-foreground">Add Test Result</h2>
@@ -311,79 +389,134 @@ const LabDashboard = () => {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="text-sm text-muted-foreground mb-4">
-              Patient: <span className="font-medium text-foreground">{selectedTest.patientId?.name}</span>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Test Name *</label>
-                <input
-                  type="text"
-                  value={resultForm.testName}
-                  onChange={(e) => setResultForm({ ...resultForm, testName: e.target.value })}
-                  placeholder="e.g., Complete Blood Count"
-                  className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Result *</label>
+            <div className="flex flex-col md:flex-row gap-6">
+              <div className="w-full md:w-1/3 border-r pr-4 space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     type="text"
-                    value={resultForm.result}
-                    onChange={(e) => setResultForm({ ...resultForm, result: e.target.value })}
-                    placeholder="e.g., 12.5"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Search Lab Catalog"
+                    value={testSearchQuery}
+                    onChange={(e) => setTestSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background pl-9 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
+                <div className="h-[300px] overflow-y-auto space-y-4 pr-2">
+                  {labCatalog.map(category => (
+                    <div key={category.category}>
+                      <h4 className="text-xs font-semibold text-primary/80 mb-2 uppercase">{category.category}</h4>
+                      <ul className="space-y-1 text-sm border-l-2 border-muted pl-2">
+                        {category.tests.map(test => (
+                          <li
+                            key={test}
+                            className={`cursor-pointer px-2 py-1 rounded transition-colors ${
+                              resultForm.testName === test
+                                ? 'bg-primary/10 text-primary font-medium'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            }`}
+                            onClick={() => setResultForm(prev => ({ ...prev, testName: test }))}
+                          >
+                            {test}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                  {labCatalog.length === 0 && (
+                    <div className="text-sm text-muted-foreground">No tests found.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="w-full md:w-2/3 space-y-4">
+                <div className="text-sm text-muted-foreground pb-2 border-b">
+                  Patient: <span className="font-medium text-foreground">{selectedTest.patientId?.name}</span>
+                </div>
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Unit</label>
+                  <label className="text-sm font-medium mb-1 block">Test Name *</label>
                   <input
                     type="text"
-                    value={resultForm.unit}
-                    onChange={(e) => setResultForm({ ...resultForm, unit: e.target.value })}
-                    placeholder="e.g., g/dL"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    value={resultForm.testName}
+                    onChange={(e) => setResultForm({ ...resultForm, testName: e.target.value })}
+                    placeholder="e.g., Complete Blood Count"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Result *</label>
+                    <input
+                      type="text"
+                      value={resultForm.result}
+                      onChange={(e) => setResultForm({ ...resultForm, result: e.target.value })}
+                      placeholder="e.g., 12.5"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Unit</label>
+                    <input
+                      type="text"
+                      value={resultForm.unit}
+                      onChange={(e) => setResultForm({ ...resultForm, unit: e.target.value })}
+                      placeholder="e.g., g/dL"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Normal Range</label>
+                    <input
+                      type="text"
+                      value={resultForm.normalRange}
+                      onChange={(e) => setResultForm({ ...resultForm, normalRange: e.target.value })}
+                      placeholder="e.g., 12-16"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Status</label>
+                    <select
+                      value={resultForm.status}
+                      onChange={(e) => setResultForm({ ...resultForm, status: e.target.value })}
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="abnormal">Abnormal</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                </div>
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Normal Range</label>
-                  <input
-                    type="text"
-                    value={resultForm.normalRange}
-                    onChange={(e) => setResultForm({ ...resultForm, normalRange: e.target.value })}
-                    placeholder="e.g., 12-16"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  <label className="text-sm font-medium mb-1 block">Upload Report Document</label>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="file"
+                      id="labReportUpload"
+                      className="w-full rounded-xl border border-input bg-background text-sm p-2 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+                      onChange={handleFileChange}
+                      accept="image/*,.pdf"
+                    />
+                    {resultForm.fileData && (
+                      <span className="text-xs text-primary font-medium tracking-tight">✓ File ready to be uploaded.</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Remarks</label>
+                  <textarea
+                    value={resultForm.remarks}
+                    onChange={(e) => setResultForm({ ...resultForm, remarks: e.target.value })}
+                    placeholder="Additional notes..."
+                    rows={2}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary resize-none"
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Status</label>
-                  <select
-                    value={resultForm.status}
-                    onChange={(e) => setResultForm({ ...resultForm, status: e.target.value })}
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="normal">Normal</option>
-                    <option value="abnormal">Abnormal</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
+                <Button className="w-full gap-2 mt-4" onClick={handleAddResult} disabled={submitting || uploadingReport || !resultForm.testName}>
+                  {(submitting || uploadingReport) ? 'Saving...' : <><CheckCircle className="h-4 w-4" /> Save Result</>}
+                </Button>
               </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Remarks</label>
-                <textarea
-                  value={resultForm.remarks}
-                  onChange={(e) => setResultForm({ ...resultForm, remarks: e.target.value })}
-                  placeholder="Additional notes..."
-                  rows={2}
-                  className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
-                />
-              </div>
-              <Button className="w-full gap-2" onClick={handleAddResult} disabled={submitting || !resultForm.testName}>
-                {submitting ? 'Saving...' : <><CheckCircle className="h-4 w-4" /> Save Result</>}
-              </Button>
             </div>
           </motion.div>
         </div>

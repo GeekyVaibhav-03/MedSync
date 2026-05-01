@@ -456,7 +456,7 @@ const ReceptionistDashboard = () => {
                       className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring transition-all"
                     >
                       <option value="normal">Normal</option>
-                      <option value="high">Urgent</option>
+                      <option value="urgent">Urgent</option>
                     </select>
                   </div>
                 </div>
@@ -587,7 +587,7 @@ const ReceptionistDashboard = () => {
                 <div className="mt-4 pt-4 border-t border-border">
                   <p className="text-sm"><span className="text-muted-foreground">Patient:</span> <span className="font-medium">{formData.name}</span></p>
                   <p className="text-sm"><span className="text-muted-foreground">Department:</span> <span className="font-medium">{formData.department}</span></p>
-                  <p className="text-sm"><span className="text-muted-foreground">Priority:</span> <span className={`font-medium ${formData.priority === 'high' ? 'text-destructive' : ''}`}>{formData.priority === 'high' ? 'Urgent' : 'Normal'}</span></p>
+                  <p className="text-sm"><span className="text-muted-foreground">Priority:</span> <span className={`font-medium ${formData.priority === 'urgent' ? 'text-destructive' : ''}`}>{formData.priority === 'urgent' ? 'Urgent' : 'Normal'}</span></p>
                 </div>
               </div>
 

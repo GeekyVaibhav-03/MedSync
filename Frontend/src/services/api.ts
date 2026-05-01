@@ -97,6 +97,7 @@ export const doctorAPI = {
     testsRecommended?: string[];
     notes?: string;
     followUpDate?: Date;
+    notepadImageUrl?: string;
   }) => api.post('/api/doctor/diagnosis', data),
   getDiagnosisHistory: (tokenId: string) => 
     api.get(`/api/doctor/history/${tokenId}`),
@@ -112,6 +113,10 @@ export const doctorAPI = {
 export const labAPI = {
   getPendingTests: () => 
     api.get('/api/lab/pending'),
+  getLabCatalog: (q?: string) =>
+    api.get('/api/lab/catalog', { params: { q } }),
+  uploadLabReportFile: (data: { fileData: string }) =>
+    api.post('/api/lab/upload', data),
   addReport: (data: {
     tokenId: string;
     testName: string;
@@ -121,6 +126,7 @@ export const labAPI = {
     unit?: string;
     status?: 'normal' | 'abnormal' | 'critical';
     remarks?: string;
+    reportFileUrl?: string;
   }) => api.post('/api/lab/report', data),
   getTestsByToken: (tokenId: string) => 
     api.get(`/api/lab/tests/${tokenId}`),
@@ -147,6 +153,12 @@ export const pharmacyAPI = {
     api.get('/api/pharmacy/my-issues', { params }),
   updatePayment: (id: string, data: { paymentStatus: string; totalAmount?: number }) => 
     api.put(`/api/pharmacy/payment/${id}`, data),
+};
+
+// Prescription API
+export const prescriptionAPI = {
+  getPdfUrl: (tokenId: string) =>
+    api.get(`/api/prescription/pdf/${tokenId}`),
 };
 
 // Analytics API

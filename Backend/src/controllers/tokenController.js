@@ -1,5 +1,6 @@
 const Token = require('../models/Token');
 const Patient = require('../models/Patient');
+const Prescription = require('../models/Prescription');
 
 /**
  * Generate a new token for patient
@@ -28,6 +29,20 @@ const generateToken = async (req, res) => {
       assignedDoctor,
       status: 'doctor'
     });
+
+    // Create linked prescription if it does not already exist for this token
+    try {
+      const existingPrescription = await Prescription.findOne({ tokenId: token._id });
+      if (!existingPrescription) {
+        await Prescription.create({
+          patientId: token.patientId,
+          tokenId: token._id,
+          status: 'doctor'
+        });
+      }
+    } catch (prescriptionError) {
+      console.error('Error creating prescription for token:', prescriptionError.message);
+    }
 
     // Populate patient info
     await token.populate('patientId', 'name age gender phone');
