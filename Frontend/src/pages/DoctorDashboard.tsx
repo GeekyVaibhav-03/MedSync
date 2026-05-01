@@ -256,6 +256,10 @@ const DoctorDashboard = () => {
       setLabCatalog(response.data.data || []);
     } catch (err) {
       console.error('Error fetching lab catalog:', err);
+      setLabCatalog(LAB_TEST_CATEGORIES.map(category => ({
+        category: category.label,
+        tests: category.tests,
+      })));
     }
   };
 
@@ -358,7 +362,8 @@ const DoctorDashboard = () => {
 
   const handleSendToLabSubmit = async () => {
     if (!selectedToken) return;
-    if (selectedTests.length === 0) {
+    const testsToSend = getSelectedTests();
+    if (testsToSend.length === 0) {
       alert('Please select at least one lab test to recommend.');
       return;
     }
@@ -367,7 +372,7 @@ const DoctorDashboard = () => {
       await doctorAPI.addDiagnosis({
         tokenId: selectedToken._id,
         disease: 'Initial Assessment (Pending Lab Tests)',
-        testsRecommended: selectedTests,
+        testsRecommended: testsToSend,
         notes: 'Sent to lab for tests before final diagnosis.',
       });
 

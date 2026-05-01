@@ -18,7 +18,7 @@ const labReportSchema = new mongoose.Schema({
   },
   result: {
     type: String,
-    required: [true, 'Test result is required'],
+    default: 'Report uploaded',
     trim: true
   },
   normalRange: {
@@ -35,6 +35,10 @@ const labReportSchema = new mongoose.Schema({
     default: 'normal'
   },
   remarks: {
+    type: String,
+    trim: true
+  },
+  reportFileUrl: {
     type: String,
     trim: true
   },

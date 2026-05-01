@@ -1,6 +1,7 @@
 const LabReport = require('../models/LabReport');
 const Token = require('../models/Token');
 const Diagnosis = require('../models/Diagnosis');
+const Prescription = require('../models/Prescription');
 const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
 
 const LAB_CATALOG = [
@@ -69,7 +70,7 @@ const uploadLabReportFile = async (req, res) => {
     }
 
     // Extract base64 part
-    const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const matches = fileData.match(/^data:([\w.+-]+\/[\w.+-]+);base64,(.+)$/);
     if (!matches || matches.length !== 3) {
       return res.status(400).json({
         success: false,
@@ -155,7 +156,7 @@ const addLabReport = async (req, res) => {
           $push: {
             labReports: {
               testName,
-              result,
+              result: result || 'Report uploaded',
               normalRange,
               remarks,
               reportFileUrl,
@@ -179,7 +180,7 @@ const addLabReport = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Lab report added successfully',
+      message: reportFileUrl ? 'File uploaded successfully' : 'Lab report added successfully',
       data: labReport
     });
   } catch (error) {
@@ -236,8 +237,7 @@ const getPendingTests = async (req, res) => {
 
     // Get tokens with lab status
     const tokens = await Token.find({
-      status: 'lab',
-      visitDate: { $gte: today, $lt: tomorrow }
+      status: 'lab'
     })
       .populate('patientId', 'name age gender phone')
       .sort({ createdAt: 1 });
@@ -245,15 +245,18 @@ const getPendingTests = async (req, res) => {
     // Get recommended tests for each token
     const tokensWithTests = await Promise.all(
       tokens.map(async (token) => {
-        const diagnosis = await Diagnosis.findOne({ tokenId: token._id })
-          .select('testsRecommended');
+        const diagnosis = await Diagnosis.findOne({
+          tokenId: token._id
+        })
+          .select('testsRecommended')
+          .sort({ createdAt: -1 });
         const completedReports = await LabReport.find({ tokenId: token._id })
           .select('testName');
         
         // Extract test names from testsRecommended objects
-        const recommendedTestNames = (diagnosis?.testsRecommended || []).map(t => 
+        const recommendedTestNames = diagnosis ? (diagnosis.testsRecommended || []).map(t => 
           typeof t === 'object' ? t.testName : t
-        );
+        ) : [];
         
         return {
           ...token.toObject(),
@@ -283,12 +286,7 @@ const getPendingTests = async (req, res) => {
  */
 const completeLabTests = async (req, res) => {
   try {
-    const token = await Token.findByIdAndUpdate(
-      req.params.tokenId,
-      { status: 'doctor' },
-      { new: true }
-    );
-
+    const token = await Token.findById(req.params.tokenId);
     if (!token) {
       return res.status(404).json({
         success: false,
@@ -296,11 +294,40 @@ const completeLabTests = async (req, res) => {
       });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Lab tests completed, token moved to doctor',
-      data: token
-    });
+    // Get recommended tests
+    const diagnosis = await Diagnosis.findOne({ tokenId: req.params.tokenId }).select('testsRecommended');
+    if (!diagnosis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Diagnosis not found'
+      });
+    }
+
+    const recommendedTests = (diagnosis.testsRecommended || []).map(t => 
+      typeof t === 'object' ? t.testName : t
+    );
+
+    // Get completed tests
+    const completedReports = await LabReport.find({ tokenId: req.params.tokenId }).select('testName');
+    const completedTestNames = completedReports.map(r => r.testName);
+
+    // Check if all tests are completed
+    if (completedTestNames.length >= recommendedTests.length) {
+      // All tests completed, move to doctor
+      await Token.findByIdAndUpdate(req.params.tokenId, { status: 'doctor' });
+      res.status(200).json({
+        success: true,
+        message: 'All lab tests completed, token moved to doctor',
+        data: { ...token.toObject(), status: 'doctor' }
+      });
+    } else {
+      // Not all tests completed, keep in lab
+      res.status(200).json({
+        success: true,
+        message: 'Lab test report added, waiting for more reports',
+        data: token
+      });
+    }
   } catch (error) {
     res.status(500).json({
       success: false,

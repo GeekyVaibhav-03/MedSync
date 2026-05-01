@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FlaskConical, Clock, CheckCircle, AlertTriangle, FileText, Search, Filter, RefreshCw, Send, X } from 'lucide-react';
+import { FlaskConical, Clock, CheckCircle, AlertTriangle, FileText, Search, RefreshCw, X } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 import { Button } from '@/components/ui/button';
 import { useSelector } from 'react-redux';
@@ -23,11 +23,6 @@ interface PendingTest {
   completedTests: string[];
 }
 
-interface LabCategory {
-  category: string;
-  tests: string[];
-}
-
 const LabDashboard = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const [pendingTests, setPendingTests] = useState<PendingTest[]>([]);
@@ -36,10 +31,8 @@ const LabDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showResultModal, setShowResultModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
-  // New Lab Catalog state
-  const [labCatalog, setLabCatalog] = useState<LabCategory[]>([]);
-  const [testSearchQuery, setTestSearchQuery] = useState('');
   const [uploadingReport, setUploadingReport] = useState(false);
 
   const [resultForm, setResultForm] = useState({
@@ -50,7 +43,8 @@ const LabDashboard = () => {
     status: 'normal',
     remarks: '',
     reportFileUrl: '',
-    fileData: ''
+    fileData: '',
+    fileName: ''
   });
 
   const fetchPendingTests = async () => {
@@ -65,29 +59,11 @@ const LabDashboard = () => {
     }
   };
 
-  const fetchLabCatalog = async (query = '') => {
-    try {
-      const response = await labAPI.getLabCatalog(query);
-      setLabCatalog(response.data.data || []);
-    } catch (err) {
-      console.error('Error fetching lab catalog:', err);
-    }
-  };
-
   useEffect(() => {
     fetchPendingTests();
-    fetchLabCatalog();
     const interval = setInterval(fetchPendingTests, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  // Debounced search for catalog
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchLabCatalog(testSearchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [testSearchQuery]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,7 +72,8 @@ const LabDashboard = () => {
       reader.onloadend = () => {
         setResultForm(prev => ({
           ...prev,
-          fileData: reader.result as string
+          fileData: reader.result as string,
+          fileName: file.name
         }));
       };
       reader.readAsDataURL(file);
@@ -104,8 +81,9 @@ const LabDashboard = () => {
   };
 
   const handleAddResult = async () => {
-    if (!selectedTest || !resultForm.testName) return;
+    if (!selectedTest || !resultForm.testName || !resultForm.fileData) return;
     setSubmitting(true);
+    setSuccessMessage('');
 
     try {
       let finalReportUrl = resultForm.reportFileUrl;
@@ -121,32 +99,22 @@ const LabDashboard = () => {
       await labAPI.addReport({
         tokenId: selectedTest._id,
         testName: resultForm.testName,
-        result: resultForm.result,
-        normalRange: resultForm.normalRange,
-        unit: resultForm.unit,
-        status: resultForm.status as 'normal' | 'abnormal' | 'critical',
-        remarks: resultForm.remarks,
+        result: resultForm.result || 'Report uploaded',
         reportFileUrl: finalReportUrl
       });
 
-      setResultForm({ testName: '', result: '', normalRange: '', unit: '', status: 'normal', remarks: '', reportFileUrl: '', fileData: '' });
+      await labAPI.completeTests(selectedTest._id);
+
+      setResultForm({ testName: '', result: '', normalRange: '', unit: '', status: 'normal', remarks: '', reportFileUrl: '', fileData: '', fileName: '' });
       setShowResultModal(false);
+      setSelectedTest(null);
+      setSuccessMessage('File uploaded successfully and sent to the doctor.');
       fetchPendingTests();
     } catch (err) {
       console.error('Error adding result:', err);
       setUploadingReport(false);
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleCompleteAndSend = async (test: PendingTest) => {
-    try {
-      await labAPI.completeTests(test._id);
-      fetchPendingTests();
-      setSelectedTest(null);
-    } catch (err) {
-      console.error('Error completing tests:', err);
     }
   };
 
@@ -211,6 +179,12 @@ const LabDashboard = () => {
                 />
               </div>
             </div>
+
+            {successMessage && (
+              <div className="mb-4 rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm font-medium text-success">
+                {successMessage}
+              </div>
+            )}
 
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Loading tests...</div>
@@ -317,10 +291,7 @@ const LabDashboard = () => {
 
                 <div className="space-y-2">
                   <Button className="w-full gap-2" onClick={() => setShowResultModal(true)}>
-                    <FileText className="h-4 w-4" /> Add Test Result
-                  </Button>
-                  <Button variant="outline" className="w-full gap-2" onClick={() => handleCompleteAndSend(selectedTest)}>
-                    <Send className="h-4 w-4" /> Complete & Send to Doctor
+                    <FileText className="h-4 w-4" /> Upload Report & Send to Doctor
                   </Button>
                   <Button
                     variant="outline"
@@ -391,157 +362,59 @@ const LabDashboard = () => {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex flex-col md:flex-row gap-6">
-              <div className="w-full md:w-1/3 border-r pr-4 space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search Lab Catalog"
-                    value={testSearchQuery}
-                    onChange={(e) => setTestSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-input bg-background pl-9 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div className="h-[300px] overflow-y-auto space-y-4 pr-2">
-                  {selectedTest.recommendedTests?.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-warning mb-2 uppercase flex items-center gap-1">
-                        <FileText className="h-3 w-3" /> Doctor Recommended
-                      </h4>
-                      <ul className="space-y-1 text-sm border-l-2 border-warning/30 pl-2">
-                        {selectedTest.recommendedTests.map((test, i) => (
-                          <li
-                            key={`rec-${i}`}
-                            className={`cursor-pointer px-2 py-1 rounded transition-colors flex items-center justify-between ${
-                              resultForm.testName === test
-                                ? 'bg-warning/20 text-warning-foreground font-medium'
-                                : 'text-muted-foreground hover:bg-warning/10 hover:text-foreground'
-                            }`}
-                            onClick={() => setResultForm(prev => ({ ...prev, testName: test }))}
-                          >
-                            <span>{test}</span>
-                            {selectedTest.completedTests?.includes(test) && (
-                              <CheckCircle className="h-3 w-3 text-success" />
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {labCatalog.map(category => (
-                    <div key={category.category}>
-                      <h4 className="text-xs font-semibold text-primary/80 mb-2 uppercase">{category.category}</h4>
-                      <ul className="space-y-1 text-sm border-l-2 border-muted pl-2">
-                        {category.tests.map(test => (
-                          <li
-                            key={test}
-                            className={`cursor-pointer px-2 py-1 rounded transition-colors ${
-                              resultForm.testName === test
-                                ? 'bg-primary/10 text-primary font-medium'
-                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                            }`}
-                            onClick={() => setResultForm(prev => ({ ...prev, testName: test }))}
-                          >
-                            {test}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                  {labCatalog.length === 0 && (
-                    <div className="text-sm text-muted-foreground">No tests found.</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="w-full md:w-2/3 space-y-4">
+            <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="text-sm text-muted-foreground pb-2 border-b">
                   Patient: <span className="font-medium text-foreground">{selectedTest.patientId?.name}</span>
                 </div>
+                {selectedTest.recommendedTests?.length > 0 && (
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <p className="text-sm text-muted-foreground mb-2">Doctor Recommended Tests</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTest.recommendedTests.map((test, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setResultForm(prev => ({ ...prev, testName: test }))}
+                          className={`rounded-full px-3 py-1 text-xs transition-colors ${
+                            resultForm.testName === test
+                              ? 'bg-warning text-warning-foreground'
+                              : 'bg-warning/10 text-warning hover:bg-warning/20'
+                          }`}
+                        >
+                          {test}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="text-sm font-medium mb-1 block">Test Name *</label>
                   <input
                     type="text"
                     value={resultForm.testName}
                     onChange={(e) => setResultForm({ ...resultForm, testName: e.target.value })}
-                    placeholder="e.g., Complete Blood Count"
+                    placeholder="Write the test name"
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Result *</label>
-                    <input
-                      type="text"
-                      value={resultForm.result}
-                      onChange={(e) => setResultForm({ ...resultForm, result: e.target.value })}
-                      placeholder="e.g., 12.5"
-                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Unit</label>
-                    <input
-                      type="text"
-                      value={resultForm.unit}
-                      onChange={(e) => setResultForm({ ...resultForm, unit: e.target.value })}
-                      placeholder="e.g., g/dL"
-                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Normal Range</label>
-                    <input
-                      type="text"
-                      value={resultForm.normalRange}
-                      onChange={(e) => setResultForm({ ...resultForm, normalRange: e.target.value })}
-                      placeholder="e.g., 12-16"
-                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Status</label>
-                    <select
-                      value={resultForm.status}
-                      onChange={(e) => setResultForm({ ...resultForm, status: e.target.value })}
-                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="normal">Normal</option>
-                      <option value="abnormal">Abnormal</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                  </div>
-                </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Upload Report Document</label>
+                  <label className="text-sm font-medium mb-1 block">Upload PDF or Document *</label>
                   <div className="flex flex-col gap-2">
                     <input
                       type="file"
                       id="labReportUpload"
                       className="w-full rounded-xl border border-input bg-background text-sm p-2 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
                       onChange={handleFileChange}
-                      accept="image/*,.pdf"
+                      accept="image/*,.pdf,.doc,.docx"
                     />
                     {resultForm.fileData && (
                       <span className="text-xs text-primary font-medium tracking-tight">✓ File ready to be uploaded.</span>
                     )}
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Remarks</label>
-                  <textarea
-                    value={resultForm.remarks}
-                    onChange={(e) => setResultForm({ ...resultForm, remarks: e.target.value })}
-                    placeholder="Additional notes..."
-                    rows={2}
-                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary resize-none"
-                  />
-                </div>
-                <Button className="w-full gap-2 mt-4" onClick={handleAddResult} disabled={submitting || uploadingReport || !resultForm.testName}>
-                  {(submitting || uploadingReport) ? 'Saving...' : <><CheckCircle className="h-4 w-4" /> Save Result</>}
+                <Button className="w-full gap-2 mt-4" onClick={handleAddResult} disabled={submitting || uploadingReport || !resultForm.testName || !resultForm.fileData}>
+                  {(submitting || uploadingReport) ? 'Uploading...' : <><CheckCircle className="h-4 w-4" /> Upload File & Send to Doctor</>}
                 </Button>
               </div>
             </div>
