@@ -111,6 +111,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
   // Tests state
   const [selectedTests, setSelectedTests] = useState<string[]>([]);
   const [allTests, setAllTests] = useState<string[]>([]);
+  const [testSearchQuery, setTestSearchQuery] = useState('');
 
   // Notes
   const [prescription, setPrescription] = useState('');
@@ -927,8 +928,20 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                         )}
 
                         {/* Available Tests */}
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Search Tests (e.g. Blood, Urine...)"
+                            value={testSearchQuery}
+                            onChange={(e) => setTestSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring mb-4"
+                          />
+                        </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
-                          {allTests.map(test => (
+                          {allTests
+                            .filter(test => test.toLowerCase().includes(testSearchQuery.toLowerCase()))
+                            .map(test => (
                             <button
                               key={test}
                               onClick={() => toggleTest(test)}

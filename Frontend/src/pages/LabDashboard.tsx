@@ -330,8 +330,10 @@ const LabDashboard = () => {
                       if (pdfWindow) pdfWindow.document.write('Loading Digital Prescription...');
                       try {
                         const res = await prescriptionAPI.getPdfUrl(selectedTest._id);
-                        if (res.data.data.pdfUrl && pdfWindow) {
-                          pdfWindow.location.href = res.data.data.pdfUrl;
+                      if (res?.data?.data?.pdfUrl && pdfWindow) {
+                        pdfWindow.location.href = res.data.data.pdfUrl;
+                      } else if (res?.data?.pdfUrl && pdfWindow) {
+                        pdfWindow.location.href = res.data.pdfUrl;
                         } else if (pdfWindow) {
                           pdfWindow.document.write('Error: Could not load the prescription.');
                         }
@@ -402,6 +404,31 @@ const LabDashboard = () => {
                   />
                 </div>
                 <div className="h-[300px] overflow-y-auto space-y-4 pr-2">
+                  {selectedTest.recommendedTests?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-warning mb-2 uppercase flex items-center gap-1">
+                        <FileText className="h-3 w-3" /> Doctor Recommended
+                      </h4>
+                      <ul className="space-y-1 text-sm border-l-2 border-warning/30 pl-2">
+                        {selectedTest.recommendedTests.map((test, i) => (
+                          <li
+                            key={`rec-${i}`}
+                            className={`cursor-pointer px-2 py-1 rounded transition-colors flex items-center justify-between ${
+                              resultForm.testName === test
+                                ? 'bg-warning/20 text-warning-foreground font-medium'
+                                : 'text-muted-foreground hover:bg-warning/10 hover:text-foreground'
+                            }`}
+                            onClick={() => setResultForm(prev => ({ ...prev, testName: test }))}
+                          >
+                            <span>{test}</span>
+                            {selectedTest.completedTests?.includes(test) && (
+                              <CheckCircle className="h-3 w-3 text-success" />
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {labCatalog.map(category => (
                     <div key={category.category}>
                       <h4 className="text-xs font-semibold text-primary/80 mb-2 uppercase">{category.category}</h4>

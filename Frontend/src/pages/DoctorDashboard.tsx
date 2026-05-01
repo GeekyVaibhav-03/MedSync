@@ -62,6 +62,7 @@ interface PatientHistory {
   previousDiagnoses: PreviousDiagnosis[];
   previousLabReports: PreviousLabReport[];
   patientReports?: PatientReport[];
+  currentLabReports?: PreviousLabReport[];
 }
 
 const DoctorDashboard = () => {
@@ -310,7 +311,7 @@ const DoctorDashboard = () => {
                           'bg-muted text-muted-foreground'
                         }`}>
                           {selectedToken.status === 'waiting' ? 'Waiting' : 
-                           selectedToken.status === 'doctor' ? 'In Consultation' : selectedToken.status}
+                           selectedToken.status === 'doctor' ? (patientHistory?.currentLabReports?.length ? 'Returned from Lab' : 'In Consultation') : selectedToken.status}
                         </span>
                       </div>
                     </div>
@@ -345,6 +346,34 @@ const DoctorDashboard = () => {
                     <div className="mt-4 p-3 rounded-lg bg-background">
                       <p className="text-muted-foreground text-xs mb-1">Symptoms / Reason for Visit</p>
                       <p className="text-sm">{selectedToken.symptoms}</p>
+                    </div>
+                  )}
+
+                  {/* Current Lab Reports Alert */}
+                  {patientHistory && patientHistory.currentLabReports && patientHistory.currentLabReports.length > 0 && (
+                    <div className="mt-4 p-4 rounded-xl bg-success/10 border border-success/20">
+                      <div className="flex items-center gap-2 mb-2 text-success">
+                        <CheckCircle className="h-5 w-5" />
+                        <h4 className="font-semibold">Returned from Lab (Results Available)</h4>
+                      </div>
+                      <div className="space-y-2 mt-3">
+                        {patientHistory.currentLabReports.map((report, i) => (
+                          <div key={i} className="p-3 rounded-lg bg-background text-sm flex items-center justify-between border border-border/50">
+                            <div>
+                              <span className="font-medium">{report.testName}</span>
+                              <div className="text-xs text-muted-foreground mt-0.5">Normal Range: {report.normalRange || 'N/A'}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`font-semibold ${report.status === 'abnormal' || report.status === 'critical' ? 'text-destructive' : 'text-success'}`}>
+                                Result: {report.result}
+                              </div>
+                              <div className={`text-xs capitalize ${report.status === 'abnormal' || report.status === 'critical' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                                {report.status}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

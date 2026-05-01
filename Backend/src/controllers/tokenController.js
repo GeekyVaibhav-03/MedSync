@@ -278,6 +278,11 @@ const searchByTokenNumber = async (req, res) => {
       .select('-fileData')
       .sort({ reportDate: -1 });
 
+    // Get current lab reports if any (this means the token went to the lab and is back)
+    const currentLabReports = await LabReport.find({
+      tokenId: token._id
+    }).sort({ reportDate: -1 });
+
     res.status(200).json({
       success: true,
       data: {
@@ -286,7 +291,8 @@ const searchByTokenNumber = async (req, res) => {
           totalPreviousVisits: previousTokens.length,
           previousDiagnoses,
           previousLabReports,
-          patientReports
+          patientReports,
+          currentLabReports
         }
       }
     });
