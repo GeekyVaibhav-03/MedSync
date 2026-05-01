@@ -140,7 +140,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
         // Fill white background
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
+
         // If already has drawing, redraw it (simplistic approach: we just let them save before switching)
       }
     }
@@ -150,11 +150,11 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
     if (!ctxRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     // Support mouse and touch
     const rect = canvas.getBoundingClientRect();
     let clientX, clientY;
-    
+
     if ('touches' in e) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
@@ -162,7 +162,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
       clientX = (e as React.MouseEvent).clientX;
       clientY = (e as React.MouseEvent).clientY;
     }
-    
+
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
@@ -176,10 +176,10 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
     e.preventDefault(); // prevent scrolling
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const rect = canvas.getBoundingClientRect();
     let clientX, clientY;
-    
+
     if ('touches' in e) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
@@ -187,7 +187,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
       clientX = (e as React.MouseEvent).clientX;
       clientY = (e as React.MouseEvent).clientY;
     }
-    
+
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
@@ -199,7 +199,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
     if (!ctxRef.current) return;
     ctxRef.current.closePath();
     setIsDrawing(false);
-    
+
     // Save image URL
     if (canvasRef.current) {
       setNotepadImageUrl(canvasRef.current.toDataURL('image/png'));
@@ -285,7 +285,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
         const data = response.data.exactMatch ? response.data.data : response.data.data[0];
         setSelectedDisease(data);
         setHealthAdvice(data.healthAdvice || '');
-        
+
         // Auto-fill medicines
         if (data.recommendedMedicines?.length) {
           setMedicines(data.recommendedMedicines.map((med: string) => ({
@@ -295,7 +295,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
             instructions: 'After meals',
           })));
         }
-        
+
         // Auto-fill tests
         if (data.recommendedTests?.length) {
           setSelectedTests(data.recommendedTests);
@@ -347,7 +347,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
       const response = await predictionAPI.predictDisease(symptoms);
       if (response.data.success) {
         setPrediction(response.data.data);
-        
+
         // Auto-select primary prediction
         if (response.data.data.primaryPrediction) {
           const primary = response.data.data.primaryPrediction;
@@ -361,7 +361,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
             symptoms: symptoms,
           });
           setHealthAdvice(primary.healthAdvice || '');
-          
+
           if (primary.recommendedMedicines?.length) {
             setMedicines(primary.recommendedMedicines.map((med: string) => ({
               name: med,
@@ -370,7 +370,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
               instructions: 'After meals',
             })));
           }
-          
+
           if (primary.recommendedTests?.length) {
             setSelectedTests(primary.recommendedTests);
           }
@@ -428,7 +428,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
 
       // Update status
       await tokenAPI.updateStatus(token._id, nextStatus);
-      
+
       onComplete();
     } catch (err) {
       console.error('Error saving diagnosis:', err);
@@ -493,7 +493,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-3">
                     {token.patientId?.phone && (
                       <div className="flex items-center gap-2 text-sm">
@@ -630,7 +630,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                             </div>
                           </div>
                         )}
-                        
+
                         {prediction.alternativePredictions?.length > 0 && (
                           <div className="space-y-2">
                             <p className="text-xs font-medium text-muted-foreground">Other possibilities:</p>
@@ -666,11 +666,10 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${
-                      activeTab === tab.id
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${activeTab === tab.id
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                      }`}
                   >
                     <tab.icon className="h-4 w-4" />
                     {tab.label}
@@ -708,7 +707,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                               )}
                             </div>
-                            
+
                             <AnimatePresence>
                               {showDiseaseSuggestions && diseaseSuggestions.length > 0 && (
                                 <motion.div
@@ -751,7 +750,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                                 {selectedDisease.severity}
                               </Badge>
                             </div>
-                            
+
                             {selectedDisease.recommendedMedicines?.length > 0 && (
                               <div>
                                 <p className="text-xs font-medium text-muted-foreground mb-1">Recommended Medicines:</p>
@@ -764,7 +763,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                                 </div>
                               </div>
                             )}
-                            
+
                             {selectedDisease.recommendedTests?.length > 0 && (
                               <div>
                                 <p className="text-xs font-medium text-muted-foreground mb-1">Recommended Tests:</p>
@@ -909,7 +908,7 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                     <Card>
                       <CardContent className="pt-6 space-y-4">
                         <h3 className="font-semibold">Recommended Lab Tests</h3>
-                        
+
                         {/* Selected Tests */}
                         {selectedTests.length > 0 && (
                           <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-muted/50">
@@ -942,25 +941,24 @@ const DoctorConsultation = ({ token, onComplete, onCancel }: DoctorConsultationP
                           {allTests
                             .filter(test => test.toLowerCase().includes(testSearchQuery.toLowerCase()))
                             .map(test => (
-                            <button
-                              key={test}
-                              onClick={() => toggleTest(test)}
-                              className={`p-3 rounded-lg border text-sm text-left transition-all ${
-                                selectedTests.includes(test)
-                                  ? 'border-primary bg-primary/5 text-primary'
-                                  : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                {selectedTests.includes(test) ? (
-                                  <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                                ) : (
-                                  <FlaskConical className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                )}
-                                <span className="line-clamp-2">{test}</span>
-                              </div>
-                            </button>
-                          ))}
+                              <button
+                                key={test}
+                                onClick={() => toggleTest(test)}
+                                className={`p-3 rounded-lg border text-sm text-left transition-all ${selectedTests.includes(test)
+                                    ? 'border-primary bg-primary/5 text-primary'
+                                    : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {selectedTests.includes(test) ? (
+                                    <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                                  ) : (
+                                    <FlaskConical className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                  )}
+                                  <span className="line-clamp-2">{test}</span>
+                                </div>
+                              </button>
+                            ))}
                         </div>
                       </CardContent>
                     </Card>

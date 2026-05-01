@@ -11,11 +11,14 @@ const {
 } = require('../controllers/labController');
 const { authenticateUser, authorizeRole } = require('../middleware/auth');
 
-// All routes are protected and require lab role
+// All routes are protected
 router.use(authenticateUser);
-router.use(authorizeRole('lab', 'admin'));
 
+// Routes accessible by any authenticated user (doctor, lab, etc.)
 router.get('/catalog', getLabCatalog);
+
+// Routes requiring lab role
+router.use(authorizeRole('lab', 'admin'));
 router.post('/upload', uploadLabReportFile);
 router.post('/report', addLabReport);
 router.get('/pending', getPendingTests);
