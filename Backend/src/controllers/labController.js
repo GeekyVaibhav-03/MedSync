@@ -4,34 +4,19 @@ const Diagnosis = require('../models/Diagnosis');
 const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
 
 const LAB_CATALOG = [
-  {
-    category: "Basic",
-    tests: ["CBC", "Hemoglobin", "ESR", "Blood Sugar Random", "Blood Urea"]
-  },
-  {
-    category: "Diabetes",
-    tests: ["Fasting Blood Sugar", "PPBS", "HbA1c", "Urine Sugar"]
-  },
-  {
-    category: "Liver Function Test (LFT)",
-    tests: ["Bilirubin Total", "SGOT", "SGPT", "Alkaline Phosphatase"]
-  },
-  {
-    category: "Kidney Function Test (KFT)",
-    tests: ["Serum Creatinine", "Blood Urea Nitrogen", "Uric Acid"]
-  },
-  {
-    category: "Thyroid",
-    tests: ["T3", "T4", "TSH"]
-  },
-  {
-    category: "Lipid Profile",
-    tests: ["Total Cholesterol", "Triglycerides", "HDL", "LDL"]
-  },
-  {
-    category: "Imaging",
-    tests: ["X-Ray Chest", "Ultrasound Abdomen", "CT Scan", "MRI"]
-  }
+  { category: "Basic", tests: ["CBC", "Hemoglobin", "ESR", "Platelet Count", "Blood Group & Rh"] },
+  { category: "Diabetes", tests: ["FBS", "PPBS", "HbA1c"] },
+  { category: "Lipid Profile", tests: ["Total Cholesterol", "HDL", "LDL", "Triglycerides"] },
+  { category: "LFT", tests: ["SGOT", "SGPT", "Bilirubin", "Alkaline Phosphatase"] },
+  { category: "KFT", tests: ["Urea", "Creatinine", "Uric Acid"] },
+  { category: "Thyroid", tests: ["T3", "T4", "TSH"] },
+  { category: "Urine", tests: ["Urine Routine", "Urine Microscopy", "Urine Culture", "Urine Protein", "Urine Sugar"] },
+  { category: "Stool", tests: ["Stool Routine", "Stool Microscopy", "Occult Blood", "Ova & Parasites"] },
+  { category: "Infection", tests: ["Blood Culture", "Urine Culture", "Sputum Culture", "Widal", "Dengue", "Malaria", "COVID-19", "HIV", "HBsAg", "Hepatitis C"] },
+  { category: "Imaging", tests: ["X-Ray", "CT Scan", "MRI", "Ultrasound"] },
+  { category: "Heart", tests: ["ECG", "Echo", "TMT"] },
+  { category: "Neuro", tests: ["EEG", "EMG"] },
+  { category: "Advanced", tests: ["Vitamin B12", "Vitamin D", "CRP", "D-Dimer", "Prolactin", "Testosterone", "Insulin"] }
 ];
 
 /**

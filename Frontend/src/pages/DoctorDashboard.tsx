@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { Users, Stethoscope, Clock, CheckCircle, AlertCircle, FileText, Pill, FlaskConical, ChevronRight, RefreshCw, Send, X, Search, History } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
-import { doctorAPI, tokenAPI } from '@/services/api';
-import DoctorConsultation from '@/components/DoctorConsultation';
+import { doctorAPI, tokenAPI, labAPI, prescriptionAPI } from '@/services/api';
 
 interface PatientData {
   _id: string;
@@ -37,6 +37,7 @@ interface PreviousDiagnosis {
   notes: string;
   createdAt: string;
   doctorId?: { name: string; department: string };
+  tokenId?: any;
 }
 
 interface PreviousLabReport {
@@ -46,6 +47,7 @@ interface PreviousLabReport {
   status: string;
   normalRange?: string;
   reportDate: string;
+  reportFileUrl?: string;
 }
 
 interface PatientReport {
@@ -73,14 +75,19 @@ const DoctorDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [showDiagnosisModal, setShowDiagnosisModal] = useState(false);
-  const [showConsultation, setShowConsultation] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showSendToLabModal, setShowSendToLabModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // New Lab states
+  const [labCatalog, setLabCatalog] = useState<{category: string, tests: string[]}[]>([]);
+  const [selectedTests, setSelectedTests] = useState<string[]>([]);
+  const [testSearchQuery, setTestSearchQuery] = useState('');
+
   const [diagnosisForm, setDiagnosisForm] = useState({
     disease: '',
     prescription: '',
     medicines: '',
-    testsRecommended: '',
     notes: '',
     sendTo: 'pharmacy' as 'pharmacy' | 'lab',
   });
@@ -101,8 +108,18 @@ const DoctorDashboard = () => {
     }
   };
 
+  const fetchLabCatalog = async () => {
+    try {
+      const response = await labAPI.getLabCatalog('');
+      setLabCatalog(response.data.data || []);
+    } catch (err) {
+      console.error('Error fetching lab catalog:', err);
+    }
+  };
+
   useEffect(() => {
     fetchTodayStats();
+    fetchLabCatalog();
     const interval = setInterval(fetchTodayStats, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -153,9 +170,7 @@ const DoctorDashboard = () => {
           }))
         : [];
 
-      const testsRecommended = diagnosisForm.testsRecommended
-        ? diagnosisForm.testsRecommended.split(',').map(t => t.trim())
-        : [];
+      const testsRecommended = selectedTests;
 
       await doctorAPI.addDiagnosis({
         tokenId: selectedToken._id,
@@ -171,7 +186,8 @@ const DoctorDashboard = () => {
       await tokenAPI.updateStatus(selectedToken._id, nextStatus);
 
       // Reset form and clear selection
-      setDiagnosisForm({ disease: '', prescription: '', medicines: '', testsRecommended: '', notes: '', sendTo: 'pharmacy' });
+      setDiagnosisForm({ disease: '', prescription: '', medicines: '', notes: '', sendTo: 'pharmacy' });
+      setSelectedTests([]);
       setShowDiagnosisModal(false);
       setSelectedToken(null);
       setPatientHistory(null);
@@ -197,16 +213,33 @@ const DoctorDashboard = () => {
     }
   };
 
-  const handleSendToLab = async () => {
+  const handleSendToLabSubmit = async () => {
     if (!selectedToken) return;
+    if (selectedTests.length === 0) {
+      alert('Please select at least one lab test to recommend.');
+      return;
+    }
+    setSubmitting(true);
     try {
+      await doctorAPI.addDiagnosis({
+        tokenId: selectedToken._id,
+        disease: 'Initial Assessment (Pending Lab Tests)',
+        testsRecommended: selectedTests,
+        notes: 'Sent to lab for tests before final diagnosis.',
+      });
+
       await tokenAPI.updateStatus(selectedToken._id, 'lab');
+
+      setSelectedTests([]);
+      setShowSendToLabModal(false);
       setSelectedToken(null);
       setPatientHistory(null);
       setSearchToken('');
       fetchTodayStats();
     } catch (err) {
       console.error('Error:', err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -370,6 +403,16 @@ const DoctorDashboard = () => {
                               <div className={`text-xs capitalize ${report.status === 'abnormal' || report.status === 'critical' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                                 {report.status}
                               </div>
+                              {report.reportFileUrl && (
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="h-auto p-0 mt-1 text-xs"
+                                  onClick={() => window.open(report.reportFileUrl, '_blank')}
+                                >
+                                  View Report File
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -411,16 +454,11 @@ const DoctorDashboard = () => {
                     </Button>
                   )}
                   {(selectedToken.status === 'waiting' || selectedToken.status === 'doctor') && (
-                    <>
-                      <Button className="gap-2" onClick={() => setShowDiagnosisModal(true)}>
-                        <FileText className="h-4 w-4" /> Add Diagnosis
-                      </Button>
-                      <Button variant="outline" className="gap-2" onClick={() => setShowConsultation(true)}>
-                        <Stethoscope className="h-4 w-4" /> Full Consultation
-                      </Button>
-                    </>
+                    <Button className="gap-2" onClick={() => setShowDiagnosisModal(true)}>
+                      <FileText className="h-4 w-4" /> Add Diagnosis
+                    </Button>
                   )}
-                  <Button variant="outline" size="sm" className="gap-1" onClick={handleSendToLab}>
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => { setSelectedTests([]); setShowSendToLabModal(true); }}>
                     <FlaskConical className="h-3 w-3" /> Send to Lab
                   </Button>
                   <Button variant="outline" size="sm" className="gap-1" onClick={handleSendToPharmacy}>
@@ -543,14 +581,69 @@ const DoctorDashboard = () => {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Lab Tests Required (comma separated)</label>
-                <input
-                  type="text"
-                  value={diagnosisForm.testsRecommended}
-                  onChange={(e) => setDiagnosisForm({ ...diagnosisForm, testsRecommended: e.target.value })}
-                  placeholder="CBC, Blood Sugar, Lipid Profile (leave empty if none)"
-                  className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
+                <label className="text-sm font-medium mb-2 block">Lab Tests Required</label>
+                <div className="flex gap-4">
+                  <div className="w-1/2 border rounded-xl p-3 h-64 overflow-y-auto bg-muted/20">
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Search Catalog..."
+                        value={testSearchQuery}
+                        onChange={(e) => setTestSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      {labCatalog
+                        .map(cat => ({
+                          ...cat,
+                          tests: cat.tests.filter(t => t.toLowerCase().includes(testSearchQuery.toLowerCase()))
+                        }))
+                        .filter(cat => cat.tests.length > 0)
+                        .map(category => (
+                          <div key={category.category}>
+                            <h4 className="text-xs font-semibold text-primary/80 mb-2 uppercase">{category.category}</h4>
+                            <ul className="space-y-1 text-sm">
+                              {category.tests.map(test => (
+                                <li
+                                  key={test}
+                                  className="cursor-pointer px-2 py-1.5 rounded transition-colors text-muted-foreground hover:bg-primary/10 hover:text-foreground flex items-center justify-between"
+                                  onClick={() => {
+                                    if (!selectedTests.includes(test)) {
+                                      setSelectedTests([...selectedTests, test]);
+                                    }
+                                  }}
+                                >
+                                  {test}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="w-1/2 border rounded-xl p-3 h-64 overflow-y-auto bg-muted/10">
+                    <h4 className="text-sm font-medium mb-3">Selected Tests</h4>
+                    {selectedTests.length === 0 ? (
+                      <div className="text-xs text-muted-foreground text-center mt-10">No tests selected</div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {selectedTests.map(test => (
+                          <div key={test} className="flex items-center justify-between bg-background p-2 rounded-lg border text-sm">
+                            <span className="truncate pr-2">{test}</span>
+                            <button
+                              onClick={() => setSelectedTests(selectedTests.filter(t => t !== test))}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">If tests are added, patient will be sent to Lab first</p>
               </div>
               <div>
@@ -630,6 +723,32 @@ const DoctorDashboard = () => {
                           By Dr. {diagnosis.doctorId.name} ({diagnosis.doctorId.department})
                         </p>
                       )}
+                      {diagnosis.tokenId && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 gap-2 w-full text-primary border-primary/50 hover:bg-primary/5"
+                          onClick={async () => {
+                            const pdfWindow = window.open('', '_blank');
+                            if (pdfWindow) pdfWindow.document.write('Loading Digital Prescription...');
+                            try {
+                              const res = await prescriptionAPI.getPdfUrl(diagnosis.tokenId);
+                              if (res?.data?.data?.pdfUrl && pdfWindow) {
+                                pdfWindow.location.href = res.data.data.pdfUrl;
+                              } else if (res?.data?.pdfUrl && pdfWindow) {
+                                pdfWindow.location.href = res.data.pdfUrl;
+                              } else if (pdfWindow) {
+                                pdfWindow.document.write('Error: Could not load the prescription.');
+                              }
+                            } catch (err) {
+                              if (pdfWindow) pdfWindow.document.write('Error loading prescription PDF.');
+                              console.error(err);
+                            }
+                          }}
+                        >
+                          <FileText className="h-4 w-4" /> View Digital Prescription
+                        </Button>
+                      )}
                     </div>
                   ))
                 )}
@@ -661,6 +780,16 @@ const DoctorDashboard = () => {
                       <div className="text-right">
                         <p className="font-medium text-sm">{report.result}</p>
                         <p className="text-xs text-muted-foreground">{formatDate(report.reportDate)}</p>
+                        {report.reportFileUrl && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 mt-1 text-xs"
+                            onClick={() => window.open(report.reportFileUrl, '_blank')}
+                          >
+                            View Report
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))
@@ -703,20 +832,117 @@ const DoctorDashboard = () => {
           </motion.div>
         </div>
       )}
+      {/* Send to Lab Modal */}
+      {showSendToLabModal && selectedToken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-background rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <FlaskConical className="h-5 w-5 text-primary" />
+                Select Lab Tests
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowSendToLabModal(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="text-sm text-muted-foreground mb-6 pb-4 border-b">
+              Patient: <span className="font-medium text-foreground">{selectedToken.patientId?.name}</span> ({selectedToken.tokenNumber})
+            </div>
 
-      {/* Full Consultation Mode */}
-      {showConsultation && selectedToken && (
-        <DoctorConsultation
-          token={selectedToken}
-          onComplete={() => {
-            setShowConsultation(false);
-            setSelectedToken(null);
-            setPatientHistory(null);
-            setSearchToken('');
-            fetchTodayStats();
-          }}
-          onCancel={() => setShowConsultation(false)}
-        />
+            <div className="flex flex-col md:flex-row gap-6 mb-6">
+              {/* Catalog Search & Selection */}
+              <div className="w-full md:w-1/2 border rounded-xl p-4 h-72 overflow-y-auto bg-muted/10">
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search Catalog..."
+                    value={testSearchQuery}
+                    onChange={(e) => setTestSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div className="space-y-4">
+                  {labCatalog
+                    .map(cat => ({
+                      ...cat,
+                      tests: cat.tests.filter(t => t.toLowerCase().includes(testSearchQuery.toLowerCase()))
+                    }))
+                    .filter(cat => cat.tests.length > 0)
+                    .map(category => (
+                      <div key={category.category}>
+                        <h4 className="text-xs font-semibold text-primary/80 mb-2 uppercase">{category.category}</h4>
+                        <ul className="space-y-1 text-sm border-l-2 border-primary/20 pl-2">
+                          {category.tests.map(test => (
+                            <li
+                              key={test}
+                              className={`cursor-pointer px-2 py-1.5 rounded transition-colors flex items-center justify-between ${
+                                selectedTests.includes(test)
+                                  ? 'bg-primary/10 text-primary font-medium'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`}
+                              onClick={() => {
+                                if (!selectedTests.includes(test)) {
+                                  setSelectedTests([...selectedTests, test]);
+                                }
+                              }}
+                            >
+                              <span>{test}</span>
+                              {selectedTests.includes(test) && <CheckCircle className="h-3 w-3 text-primary" />}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                  ))}
+                  {labCatalog.length === 0 && (
+                    <div className="text-sm text-muted-foreground text-center py-4">No lab catalog found.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Tests List */}
+              <div className="w-full md:w-1/2 border rounded-xl p-4 h-72 overflow-y-auto bg-muted/5">
+                <h4 className="text-sm font-medium mb-4 flex items-center justify-between border-b pb-2">
+                  <span>Selected Tests</span>
+                  <Badge variant="secondary" className="text-xs">{selectedTests.length}</Badge>
+                </h4>
+                {selectedTests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-center px-4">
+                    <FlaskConical className="h-8 w-8 text-muted/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">Select tests from the catalog to send the patient to the lab.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {selectedTests.map(test => (
+                      <div key={test} className="flex items-center justify-between bg-background p-2 rounded-lg border border-primary/20 text-sm shadow-sm">
+                        <span className="truncate pr-2 font-medium">{test}</span>
+                        <button
+                          onClick={() => setSelectedTests(selectedTests.filter(t => t !== test))}
+                          className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Button 
+              className="w-full gap-2 py-6 text-base shadow-lg" 
+              onClick={handleSendToLabSubmit} 
+              disabled={submitting || selectedTests.length === 0}
+            >
+              {submitting ? 'Sending...' : <><FlaskConical className="h-5 w-5" /> Send Patient to Lab</>}
+            </Button>
+          </motion.div>
+        </div>
       )}
     </div>
   );
